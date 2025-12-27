@@ -1,0 +1,96 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                Int     @id @default(autoincrement())
+  email             String  @unique
+  passwordHash      String
+  adminPasswordHash String?
+}
+
+model Client {
+  id      Int     @id @default(autoincrement())
+  name    String
+  phone   String  @unique
+  cpf     String?
+  rg      String?
+  city    String?
+  address String?
+  billingAddress String? @map("billingaddress")
+  sales   Sale[]
+}
+
+model Sale {
+  id            Int          @id @default(autoincrement())
+  clientId      Int
+  client        Client       @relation(fields: [clientId], references: [id])
+  itemName      String
+  itemCode      String?
+  factor        Float?
+  itemType      String?
+  baseValue     Float?
+  totalValue    Float
+  paymentMethod String
+  installments  Int
+  saleDate      DateTime
+  observations  String?
+  sellerName    String?
+  commission    Float?
+  installmentsR Installment[]
+}
+
+model Installment {
+  id        Int       @id @default(autoincrement())
+  saleId    Int
+  sale      Sale      @relation(fields: [saleId], references: [id])
+  sequence  Int
+  amount    Float
+  dueDate   DateTime
+  paid      Boolean   @default(false)
+  paidAt    DateTime?
+}
+
+model Expense {
+  id        Int      @id @default(autoincrement())
+  description String
+  category    String?
+  amount    Float
+  date      DateTime
+  paid      Boolean @default(true)
+}
+
+model Settings {
+  id                Int      @id @default(autoincrement())
+  key               String   @unique
+  value             String
+  updatedAt         DateTime @default(now()) @updatedAt
+}
+
+model MessageLog {
+  id          Int      @id @default(autoincrement())
+  recipient   String
+  message     String
+  provider    String
+  status      String
+  error       String?
+  createdAt   DateTime @default(now())
+}
+
+model SaleDeletion {
+  id           Int      @id @default(autoincrement())
+  saleId       Int
+  clientName   String
+  itemName     String
+  totalValue   Float
+  saleDate     DateTime
+  deletedBy    String
+  reason       String
+  deletedAt    DateTime @default(now())
+}

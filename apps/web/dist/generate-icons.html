@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head><title>Generate Icons</title></head>
+<body>
+<canvas id="c192" width="192" height="192"></canvas>
+<canvas id="c512" width="512" height="512"></canvas>
+<script>
+function draw(canvas, size) {
+  const ctx = canvas.getContext('2d');
+  const r = size * 0.2;
+  
+  ctx.fillStyle = '#7a57d1';
+  ctx.beginPath();
+  ctx.roundRect(0, 0, size, size, r);
+  ctx.fill();
+  
+  ctx.font = `${size * 0.5}px Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('💎', size/2, size/2);
+}
+
+draw(document.getElementById('c192'), 192);
+draw(document.getElementById('c512'), 512);
+
+console.log('192:', document.getElementById('c192').toDataURL('image/png'));
+console.log('512:', document.getElementById('c512').toDataURL('image/png'));
+</script>
+</body>
+</html>

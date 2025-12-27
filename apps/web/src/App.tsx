@@ -1,0 +1,3928 @@
+import React, { useState, useEffect, Fragment } from 'react';
+
+// Componente Modal de Pagamento
+function PaymentModal({ installment, onConfirm, onClose }: Readonly<{ 
+  installment: { id: number; sequence: number; amount: number; sale: { itemName: string; client?: { name: string } } };
+  onConfirm: (id: number, paidAt: string) => void;
+  onClose: () => void;
+}>) {
+  const [paidAt, setPaidAt] = useState(new Date().toISOString().split('T')[0]);
+  
+  const formatCurrency = (value: number) => 
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full" onClick={e => e.stopPropagation()}>
+        <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white p-6 rounded-t-xl">
+          <div className="flex justify-between items-start">
+            <div>
+              <h2 className="text-xl font-bold">💰 Registrar Pagamento</h2>
+              <p className="text-sm mt-1 opacity-90">Confirme a data do pagamento</p>
+            </div>
+            <button onClick={onClose} className="text-2xl hover:opacity-70">×</button>
+          </div>
+        </div>
+
+        <div className="p-6">
+          <div className="bg-gray-50 rounded-lg p-4 mb-4">
+            <p className="font-semibold text-gray-800">👤 {installment.sale.client?.name || 'Cliente'}</p>
+            <p className="text-sm text-gray-600 mt-1">💎 {installment.sale.itemName}</p>
+            <p className="text-sm text-gray-600">📋 Parcela {installment.sequence}</p>
+            <p className="font-bold text-green-600 mt-2 text-lg">{formatCurrency(installment.amount)}</p>
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="paidAt">📅 Data do Pagamento</label>
+            <input
+              id="paidAt"
+              type="date"
+              value={paidAt}
+              onChange={(e) => setPaidAt(e.target.value)}
+              title="Data do pagamento"
+              className="w-full border-2 border-gray-200 rounded-lg p-3 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 p-3 rounded-lg font-semibold transition"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => onConfirm(installment.id, paidAt)}
+              className="flex-1 bg-green-500 hover:bg-green-600 text-white p-3 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+            >
+              ✓ Confirmar Pagamento
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Componente Modal de Compartilhamento do Carnê
+function ShareCarneModal({ sale, client, onClose }: Readonly<{ sale: any, client: any, onClose: () => void }>) {
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
+
+  const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+  // Gerar texto do carnê para WhatsApp
+  const generateCarneText = () => {
+    let text = `💎 *VANI E ELO JOIAS*\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━\n`;
+    text += `👤 Cliente: *${client.name}*\n`;
+    text += `📅 Data: ${new Date(sale.saleDate).toLocaleDateString('pt-BR')}\n\n`;
+    text += `💍 *${sale.itemName}*\n`;
+    if (sale.itemCode) text += `📦 Código: ${sale.itemCode}\n`;
+    text += `💰 Valor Total: *${formatCurrency(sale.totalValue)}*\n`;
+    text += `📊 Parcelas: ${sale.installments}x de ${formatCurrency(sale.totalValue / sale.installments)}\n\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━\n`;
+    text += `📋 *CONTROLE DE PARCELAS*\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+    if (sale.installmentsR) {
+      const byYear: { [year: number]: any[] } = {};
+      sale.installmentsR.forEach((inst: any) => {
+        const year = new Date(inst.dueDate).getFullYear();
+        if (!byYear[year]) byYear[year] = [];
+        byYear[year].push(inst);
+      });
+
+      Object.keys(byYear).sort().forEach(year => {
+        text += `📅 *ANO ${year}*\n`;
+        byYear[Number(year)].forEach((inst: any) => {
+          const month = months[new Date(inst.dueDate).getMonth()];
+          const status = inst.paid ? '✅' : '⬜';
+          text += `${status} ${month.substring(0, 3)}: ${formatCurrency(inst.amount)}\n`;
+        });
+        text += `\n`;
+      });
+    }
+
+    text += `━━━━━━━━━━━━━━━━━━━━\n`;
+    text += `✨ Obrigada pela preferência!`;
+    return text;
+  };
+
+  // Enviar via WhatsApp
+  const sendWhatsApp = () => {
+    const text = encodeURIComponent(generateCarneText());
+    const phone = client.phone.replace(/\D/g, '');
+    const url = `https://wa.me/55${phone}?text=${text}`;
+    window.open(url, '_blank');
+  };
+
+  // Copiar texto
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(generateCarneText());
+    alert('Texto copiado! Cole no WhatsApp ou onde preferir.');
+  };
+
+  // Imprimir carnê
+  const printCarne = () => {
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      // Agrupar parcelas por ano
+      const byYear: { [year: number]: any[] } = {};
+      if (sale.installmentsR) {
+        sale.installmentsR.forEach((inst: any) => {
+          const year = new Date(inst.dueDate).getFullYear();
+          if (!byYear[year]) byYear[year] = [];
+          byYear[year].push(inst);
+        });
+      }
+
+      const yearsHtml = Object.keys(byYear).sort().map(year => `
+        <div class="year-section">
+          <div class="year-title">ANO: ${year}</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Mês</th>
+                <th>Valor</th>
+                <th>Pago</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${months.map((m, idx) => {
+                const inst = byYear[Number(year)]?.find((i: any) => new Date(i.dueDate).getMonth() === idx);
+                if (!inst) return `<tr><td>${m}</td><td class="amount">—</td><td class="status"></td></tr>`;
+                return `<tr class="${inst.paid ? 'paid' : ''}">
+                  <td>${m}</td>
+                  <td class="amount">${formatCurrency(inst.amount)}</td>
+                  <td class="status">${inst.paid ? '✓' : '○'}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `).join('');
+
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Carnê - ${client.name}</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+              .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+              .header h1 { margin: 0; font-size: 24px; }
+              .client-info { margin-bottom: 20px; }
+              .sale-info { margin-bottom: 20px; padding: 10px; background: #f5f5f5; border-radius: 5px; }
+              .parcelas-title { text-align: center; font-weight: bold; font-size: 18px; margin: 20px 0; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 10px 0; }
+              .year-section { margin-bottom: 20px; break-inside: avoid; }
+              .year-title { font-weight: bold; background: #eee; padding: 5px 10px; }
+              table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+              th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+              th { background: #f0f0f0; }
+              .paid { background: #d4edda; }
+              .amount { text-align: right; font-family: monospace; }
+              .status { text-align: center; font-size: 18px; }
+              @media print { 
+                body { padding: 10px; } 
+                .no-print { display: none; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>💎 Vani e Elo Joias</h1>
+            </div>
+            <div class="client-info">
+              <p><strong>Cliente:</strong> ${client.name}</p>
+              <p><strong>Telefone:</strong> ${client.phone}</p>
+            </div>
+            <div class="sale-info">
+              <p><strong>Peça:</strong> ${sale.itemName}</p>
+              ${sale.itemCode ? `<p><strong>Código:</strong> ${sale.itemCode}</p>` : ''}
+              <p><strong>Data da Venda:</strong> ${new Date(sale.saleDate).toLocaleDateString('pt-BR')}</p>
+              <p><strong>Valor Total:</strong> ${formatCurrency(sale.totalValue)}</p>
+              <p><strong>Parcelas:</strong> ${sale.installments}x de ${formatCurrency(sale.totalValue / sale.installments)}</p>
+            </div>
+            <div class="parcelas-title">CONTROLE DE PARCELAS</div>
+            ${yearsHtml || '<p>Nenhuma parcela</p>'}
+            <script>
+              window.onload = function() { 
+                setTimeout(function() { window.print(); }, 500); 
+              };
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full" onClick={e => e.stopPropagation()}>
+        <div className="bg-gradient-to-r from-green-500 to-teal-500 text-white p-6 rounded-t-xl">
+          <div className="flex justify-between items-start">
+            <div>
+              <h2 className="text-xl font-bold">✅ Venda Registrada!</h2>
+              <p className="text-sm mt-1 opacity-90">Enviar carnê para o cliente?</p>
+            </div>
+            <button onClick={onClose} className="text-2xl hover:opacity-70">×</button>
+          </div>
+        </div>
+
+        <div className="p-6">
+          <div className="bg-gray-50 rounded-lg p-4 mb-6">
+            <p className="font-semibold text-gray-800">👤 {client.name}</p>
+            <p className="text-sm text-gray-600">📱 {client.phone}</p>
+            <p className="text-sm text-gray-600 mt-2">💎 {sale.itemName}</p>
+            <p className="font-bold text-green-600 mt-1">{formatCurrency(sale.totalValue)} em {sale.installments}x</p>
+          </div>
+
+          <div className="space-y-3">
+            <button
+              onClick={sendWhatsApp}
+              className="w-full bg-green-500 hover:bg-green-600 text-white p-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition"
+            >
+              <span className="text-xl">📱</span>
+              Enviar via WhatsApp
+            </button>
+
+            <button
+              onClick={copyToClipboard}
+              className="w-full bg-blue-500 hover:bg-blue-600 text-white p-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition"
+            >
+              <span className="text-xl">📋</span>
+              Copiar Texto
+            </button>
+
+            <button
+              onClick={printCarne}
+              className="w-full bg-purple-500 hover:bg-purple-600 text-white p-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition"
+            >
+              <span className="text-xl">🖨️</span>
+              Imprimir / Salvar PDF
+            </button>
+
+            <button
+              onClick={onClose}
+              className="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 p-4 rounded-lg font-semibold transition"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Componente Modal de Carnê de Parcelas
+function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token }: Readonly<{ client: any, sales: any[], onClose: () => void, onMarkPaid?: (inst: any) => void, onUpdateClient?: (clientId: number, data: any) => Promise<void>, token?: string }>) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: client.name || '',
+    phone: client.phone || '',
+    cpf: client.cpf || '',
+    rg: client.rg || '',
+    city: client.city || '',
+    address: client.address || '',
+    billingAddress: client.billingAddress || ''
+  });
+
+  const handleSaveEdit = async () => {
+    if (onUpdateClient) {
+      await onUpdateClient(client.id, editForm);
+      setIsEditing(false);
+    }
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
+
+  const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+  // Agrupar parcelas por ano
+  const groupInstallmentsByYear = (installments: any[]) => {
+    const grouped: { [year: number]: any[] } = {};
+    installments.forEach(inst => {
+      const year = new Date(inst.dueDate).getFullYear();
+      if (!grouped[year]) grouped[year] = [];
+      grouped[year].push(inst);
+    });
+    return grouped;
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-6 rounded-t-xl">
+          <div className="flex justify-between items-start">
+            <div className="flex-1">
+              <h2 className="text-2xl font-bold">💎 Vani e Elo Joias</h2>
+              {isEditing ? (
+                <div className="mt-3 space-y-2">
+                  <input 
+                    type="text" 
+                    placeholder="Nome" 
+                    value={editForm.name}
+                    onChange={e => setEditForm({...editForm, name: e.target.value})}
+                    className="w-full p-2 rounded text-gray-800 text-sm"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Telefone" 
+                      value={editForm.phone}
+                      onChange={e => setEditForm({...editForm, phone: e.target.value})}
+                      className="p-2 rounded text-gray-800 text-sm"
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="CPF" 
+                      value={editForm.cpf}
+                      onChange={e => setEditForm({...editForm, cpf: e.target.value})}
+                      className="p-2 rounded text-gray-800 text-sm"
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="RG" 
+                      value={editForm.rg}
+                      onChange={e => setEditForm({...editForm, rg: e.target.value})}
+                      className="p-2 rounded text-gray-800 text-sm"
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Cidade" 
+                      value={editForm.city}
+                      onChange={e => setEditForm({...editForm, city: e.target.value})}
+                      className="p-2 rounded text-gray-800 text-sm"
+                    />
+                  </div>
+                  <textarea 
+                    placeholder="Endereço" 
+                    value={editForm.address}
+                    onChange={e => setEditForm({...editForm, address: e.target.value})}
+                    className="w-full p-2 rounded text-gray-800 text-sm h-16"
+                  />
+                  <textarea 
+                    placeholder="Endereço de cobrança" 
+                    value={editForm.billingAddress}
+                    onChange={e => setEditForm({...editForm, billingAddress: e.target.value})}
+                    className="w-full p-2 rounded text-gray-800 text-sm h-16"
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <button 
+                      onClick={handleSaveEdit}
+                      className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded text-sm font-semibold"
+                    >
+                      ✓ Salvar
+                    </button>
+                    <button 
+                      onClick={() => setIsEditing(false)}
+                      className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-lg mt-2">Cliente: <strong>{client.name}</strong></p>
+                  <p className="text-sm opacity-80">📱 {client.phone}</p>
+                  {client.cpf && <p className="text-sm opacity-80">📄 CPF: {client.cpf}</p>}
+                  {client.rg && <p className="text-sm opacity-80">🪪 RG: {client.rg}</p>}
+                  {client.city && <p className="text-sm opacity-80">🏙️ {client.city}</p>}
+                  {client.address && <p className="text-sm opacity-80">📍 {client.address}</p>}
+                  {client.billingAddress && <p className="text-sm opacity-80">💳 Cobrança: {client.billingAddress}</p>}
+                  {onUpdateClient && (
+                    <button 
+                      onClick={() => setIsEditing(true)}
+                      className="mt-2 bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm"
+                    >
+                      ✏️ Editar Cliente
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+            <button onClick={onClose} className="text-3xl hover:opacity-70 ml-4">×</button>
+          </div>
+        </div>
+
+        {/* Resumo */}
+        <div className="p-6 bg-gray-50 border-b">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white p-4 rounded-lg shadow">
+              <p className="text-sm text-gray-500">Total de Vendas</p>
+              <p className="text-2xl font-bold text-purple-600">{sales.length}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow">
+              <p className="text-sm text-gray-500">Valor Total</p>
+              <p className="text-xl font-bold text-green-600">{formatCurrency(sales.reduce((sum, s) => sum + s.totalValue, 0))}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow">
+              <p className="text-sm text-gray-500">Parcelas Pagas</p>
+              <p className="text-xl font-bold text-blue-600">
+                {sales.reduce((sum, s) => sum + (s.installmentsR?.filter((i: any) => i.paid).length || 0), 0)}
+              </p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow">
+              <p className="text-sm text-gray-500">Parcelas Pendentes</p>
+              <p className="text-xl font-bold text-orange-600">
+                {sales.reduce((sum, s) => sum + (s.installmentsR?.filter((i: any) => !i.paid).length || 0), 0)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Carnês por Venda */}
+        <div className="p-6 space-y-6">
+          {sales.map((sale: any) => {
+            const installmentsByYear = groupInstallmentsByYear(sale.installmentsR || []);
+            const years = Object.keys(installmentsByYear).map(Number).sort();
+            
+            return (
+              <div key={sale.id} className="border-2 border-gray-200 rounded-xl overflow-hidden">
+                {/* Cabeçalho da Venda */}
+                <div className="bg-purple-100 p-4 border-b">
+                  <div className="flex justify-between items-start flex-wrap gap-2">
+                    <div>
+                      <h3 className="font-bold text-lg text-gray-800">💎 {sale.itemName}</h3>
+                      {sale.itemCode && <p className="text-sm text-gray-600">Código: {sale.itemCode}</p>}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-600">Data: {new Date(sale.saleDate).toLocaleDateString('pt-BR')}</p>
+                      <p className="font-bold text-green-600">{formatCurrency(sale.totalValue)}</p>
+                      {sale.factor && <p className="text-xs text-gray-500">Fator: {sale.factor} | Base: {formatCurrency(sale.baseValue)}</p>}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Carnê de Parcelas - Estilo igual ao papel */}
+                <div className="p-4">
+                  <h4 className="font-bold text-center text-gray-800 mb-4 text-lg border-b-2 border-gray-300 pb-2">
+                    CONTROLE DE PARCELAS
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {years.map(year => (
+                      <div key={year} className="border rounded-lg overflow-hidden">
+                        <div className="bg-gray-100 p-2 font-bold text-center border-b">
+                          ANO: {year}
+                        </div>
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-gray-50">
+                              <th className="text-left p-2 border-b">Mês</th>
+                              <th className="text-right p-2 border-b">R$</th>
+                              <th className="text-center p-2 border-b">PAGO</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {months.map((monthName, monthIndex) => {
+                              const inst = installmentsByYear[year]?.find((i: any) => 
+                                new Date(i.dueDate).getMonth() === monthIndex
+                              );
+                              
+                              return (
+                                <tr key={monthIndex} className={inst ? (inst.paid ? 'bg-green-50' : 'bg-white') : 'bg-gray-50'}>
+                                  <td className="p-2 border-b">{monthName.substring(0, 3)}</td>
+                                  <td className="p-2 border-b text-right font-mono">
+                                    {inst ? formatCurrency(inst.amount).replace('R$', '').trim() : '—'}
+                                  </td>
+                                  <td className="p-2 border-b text-center">
+                                    {inst ? (
+                                      inst.paid ? (
+                                        <span className="text-green-600 font-bold" title={inst.paidAt ? `Pago em ${new Date(inst.paidAt).toLocaleDateString('pt-BR')}` : 'Pago'}>✓</span>
+                                      ) : onMarkPaid ? (
+                                        <button 
+                                          onClick={() => onMarkPaid(inst)}
+                                          className="text-gray-400 hover:text-green-500 transition"
+                                          title="Marcar como pago"
+                                        >
+                                          ○
+                                        </button>
+                                      ) : (
+                                        <span className="text-gray-300">○</span>
+                                      )
+                                    ) : ''}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {sales.length === 0 && (
+            <p className="text-center text-gray-500 py-8">Nenhuma venda registrada para este cliente</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const [loggedEmail, setLoggedEmail] = useState(localStorage.getItem('loggedEmail') || '');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [page, setPage] = useState('dashboard');
+  const [stats, setStats] = useState<any>(null);
+  const [recentSales, setRecentSales] = useState<any[]>([]);
+  const [pendingInstallments, setPendingInstallments] = useState<any[]>([]);
+  const [monthlyRevenue, setMonthlyRevenue] = useState<number[]>([]);
+  const [clients, setClients] = useState<any[]>([]);
+  const [filteredClients, setFilteredClients] = useState<any[]>([]);
+  const [clientSearch, setClientSearch] = useState('');
+  const [selectedClientForModal, setSelectedClientForModal] = useState<any>(null);
+  const [clientSalesForModal, setClientSalesForModal] = useState<any[]>([]);
+  const [paymentModalInstallment, setPaymentModalInstallment] = useState<any>(null);
+  
+  // Estados para modais de estatísticas
+  const [statsModal, setStatsModal] = useState<string | null>(null);
+  const [allSales, setAllSales] = useState<any[]>([]);
+  const [allExpenses, setAllExpenses] = useState<any[]>([]);
+  const [forecastData, setForecastData] = useState<{ month: string; value: number; accumulated: number; installments?: any[] }[]>([]);
+  const [shareModalData, setShareModalData] = useState<{ sale: any; client: any; message?: string } | null>(null);
+  const [editingClient, setEditingClient] = useState<any>(null);
+  const [editingInstallment, setEditingInstallment] = useState<any>(null);
+  const [expandedMonths, setExpandedMonths] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (token && page === 'dashboard') {
+      loadDashboard();
+    }
+    if (token && page === 'clientes') {
+      loadClients();
+    }
+    if (token && (page === 'vendas' || page === 'clientes')) {
+      loadClients();
+    }
+  }, [token, page]);
+
+  const loadClients = async () => {
+    const res = await fetch('/api/clients', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (Array.isArray(data)) {
+      setClients(data);
+      setFilteredClients(data);
+    }
+  };
+
+  const loadDashboard = async () => {
+    const headers = { Authorization: `Bearer ${token}` };
+    const [statsRes, salesRes, installmentsRes, revenueRes, allInstallmentsRes] = await Promise.all([
+      fetch('/api/dashboard/stats', { headers }),
+      fetch('/api/dashboard/recent-sales', { headers }),
+      fetch('/api/dashboard/pending-installments', { headers }),
+      fetch('/api/dashboard/monthly-revenue', { headers }),
+      fetch('/api/installments/pending', { headers })
+    ]);
+    setStats(await statsRes.json());
+    setRecentSales(await salesRes.json());
+    setPendingInstallments(await installmentsRes.json());
+    setMonthlyRevenue(await revenueRes.json());
+    
+    // Calcular previsão de recebimentos
+    const allPending = await allInstallmentsRes.json();
+    if (Array.isArray(allPending)) {
+      const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+      const currentYear = new Date().getFullYear();
+      const forecast: { [key: string]: { value: number; installments: any[] } } = {};
+      
+      // Inicializar todos os meses do ano atual
+      for (let i = 0; i < 12; i++) {
+        forecast[`${currentYear}-${i}`] = { value: 0, installments: [] };
+      }
+      
+      // Somar parcelas por mês
+      allPending.forEach((inst: any) => {
+        const dueDate = new Date(inst.dueDate);
+        const year = dueDate.getFullYear();
+        const month = dueDate.getMonth();
+        if (year === currentYear && !inst.paid) {
+          forecast[`${year}-${month}`].value += (inst.amount || 0);
+          forecast[`${year}-${month}`].installments.push(inst);
+        }
+      });
+      
+      // Converter para array com acumulado
+      let accumulated = 0;
+      const forecastArray = [];
+      for (let i = 0; i < 12; i++) {
+        const monthData = forecast[`${currentYear}-${i}`];
+        accumulated += monthData.value;
+        forecastArray.push({
+          month: months[i],
+          value: monthData.value,
+          accumulated,
+          installments: monthData.installments
+        });
+      }
+      setForecastData(forecastArray);
+    }
+  };
+
+  const openStatsModal = async (type: string) => {
+    setStatsModal(type);
+    const headers = { Authorization: `Bearer ${token}` };
+    
+    if (type === 'vendas' || type === 'receita' || type === 'saldo') {
+      const res = await fetch('/api/sales', { headers });
+      const data = await res.json();
+      setAllSales(Array.isArray(data) ? data : []);
+    }
+    
+    if (type === 'despesas' || type === 'saldo') {
+      const res = await fetch('/api/expenses', { headers });
+      const data = await res.json();
+      setAllExpenses(Array.isArray(data) ? data : []);
+    }
+  };
+
+  const openClientModal = async (clientId: number) => {
+    const client = clients.find(c => c.id === clientId);
+    if (!client) {
+      // Buscar cliente se não estiver na lista
+      const clientRes = await fetch(`/api/clients`, { headers: { Authorization: `Bearer ${token}` }});
+      const allClients = await clientRes.json();
+      const foundClient = allClients.find((c: any) => c.id === clientId);
+      if (foundClient) setSelectedClientForModal(foundClient);
+    } else {
+      setSelectedClientForModal(client);
+    }
+    
+    // Buscar vendas do cliente
+    const salesRes = await fetch(`/api/clients/${clientId}/sales`, { headers: { Authorization: `Bearer ${token}` }});
+    const sales = await salesRes.json();
+    setClientSalesForModal(sales);
+  };
+
+  const closeClientModal = () => {
+    setSelectedClientForModal(null);
+    setClientSalesForModal([]);
+  };
+
+  const handleLogin = async () => {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (data.token) {
+      setToken(data.token);
+      setLoggedEmail(email);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('loggedEmail', email);
+      setPage('dashboard');
+    } else {
+      alert('Erro ao fazer login');
+    }
+  };
+
+  const handleRegister = async () => {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (data.token) {
+      setToken(data.token);
+      localStorage.setItem('token', data.token);
+      setPage('dashboard');
+    } else {
+      alert('Erro ao registrar');
+    }
+  };
+
+  const markAsPaid = async (id: number, paidAt?: string) => {
+    const res = await fetch(`/api/installments/${id}/pay`, {
+      method: 'POST',
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ paidAt })
+    });
+    const paidInstallment = await res.json();
+    setPaymentModalInstallment(null);
+    loadDashboard();
+    
+    // Recarregar dados do modal se estiver aberto
+    if (selectedClientForModal) {
+      const salesRes = await fetch(`/api/clients/${selectedClientForModal.id}/sales`, { headers: { Authorization: `Bearer ${token}` }});
+      const sales = await salesRes.json();
+      setClientSalesForModal(sales);
+    }
+    
+    // Abrir modal de compartilhamento do carnê atualizado
+    if (paidInstallment.sale) {
+      setShareModalData({
+        sale: paidInstallment.sale,
+        client: paidInstallment.sale.client,
+        message: `Parcela ${paidInstallment.sequence} paga com sucesso! Deseja enviar o carnê atualizado?`
+      });
+    }
+  };
+
+  // Editar valor de parcela
+  const handleEditInstallment = async (installmentId: number, newAmount: number) => {
+    await fetch(`/api/installments/${installmentId}`, {
+      method: 'PUT',
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ amount: newAmount })
+    });
+    loadDashboard();
+  };
+
+  // Editar cliente
+  const handleUpdateClient = async (clientId: number, data: any) => {
+    await fetch(`/api/clients/${clientId}`, {
+      method: 'PUT',
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+    loadClients();
+    if (selectedClientForModal?.id === clientId) {
+      setSelectedClientForModal({ ...selectedClientForModal, ...data });
+    }
+  };
+
+  const handleClientSearch = (e: any) => {
+    const raw = e.target.value;
+    const search = raw.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+    const phoneSearch = raw.replace(/\D/g, '');
+    setClientSearch(raw);
+    setFilteredClients(
+      clients.filter(c => 
+        (search && (
+          c.name.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').startsWith(search) ||
+          c.name.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').includes(search)
+        )) ||
+        (phoneSearch && (
+          c.phone.startsWith(phoneSearch) || c.phone.includes(phoneSearch)
+        ))
+      )
+    );
+  };
+
+  const handleImportClients = async (e: any) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/api/clients/import', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+      const data = await res.json();
+      if (data.imported !== undefined) {
+        if (data.imported === 0) {
+          alert('✓ Importação concluída!\n\nNenhum contato novo foi adicionado.\nTodos os números já existem no sistema.');
+        } else {
+          alert(`✓ Importação concluída com sucesso!\n\n${data.imported} novo(s) contato(s) adicionado(s).\n\nContatos duplicados (telefones já existentes) foram ignorados automaticamente.`);
+        }
+        loadClients();
+      }
+    } catch (error) {
+      alert('Erro ao importar contatos');
+    }
+    // Limpar input para permitir reimportar mesmo arquivo
+    e.target.value = '';
+  };
+
+  const handleDeleteAllClients = async () => {
+    const confirmation = prompt('⚠️ ATENÇÃO!\n\nVocê tem certeza que deseja APAGAR TODOS OS CLIENTES?\n\nEsta ação NÃO pode ser desfeita!\n\nDigite "CONFIRMAR" para continuar:');
+    if (confirmation !== 'CONFIRMAR') {
+      alert('Operação cancelada.');
+      return;
+    }
+
+    const secondConfirm = confirm(`Confirmando pela última vez:\n\nTodos os ${clients.length} clientes serão PERMANENTEMENTE DELETADOS.\n\nProsseguir?`);
+    if (!secondConfirm) {
+      alert('Operação cancelada.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/clients/delete-all', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        alert(`✓ ${data.deleted} cliente(s) foram deletados com sucesso!`);
+        loadClients();
+      } else {
+        alert('Erro ao deletar clientes');
+      }
+    } catch (error) {
+      alert('Erro ao deletar clientes: ' + error);
+    }
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
+
+  const formatDate = (date: string) => {
+    return new Date(date).toLocaleDateString('pt-BR');
+  };
+
+  if (!token) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-600 to-blue-500">
+        <div className="bg-white p-8 rounded-xl shadow-2xl w-96">
+          <h1 className="text-3xl font-bold text-gray-800 mb-6">💎 Joias Vendas</h1>
+          <input
+            type="email"
+            placeholder="E-mail"
+            className="w-full p-3 border rounded-lg mb-3"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <input
+            type="password"
+            placeholder="Senha"
+            className="w-full p-3 border rounded-lg mb-4"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button onClick={handleLogin} className="w-full bg-purple-600 text-white p-3 rounded-lg font-semibold hover:bg-purple-700">
+            Entrar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <nav className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 shadow-lg">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">💎 Joias Vendas</h1>
+          <div className="flex items-center gap-3">
+            <span className="text-sm bg-white/20 px-3 py-1 rounded-full">👤 {loggedEmail}</span>
+          </div>
+        </div>
+        <div className="flex gap-3 mt-3 flex-wrap">
+          <button 
+            onClick={() => setPage('dashboard')} 
+            className={`px-4 py-2 rounded ${page === 'dashboard' ? 'bg-white text-purple-600' : 'bg-purple-500'}`}>
+            📊 Dashboard
+          </button>
+          <button 
+            onClick={() => setPage('vendas')} 
+            className={`px-4 py-2 rounded ${page === 'vendas' ? 'bg-white text-purple-600' : 'bg-purple-500'}`}>
+            ➕ Nova Venda
+          </button>
+          <button 
+            onClick={() => setPage('despesas')} 
+            className={`px-4 py-2 rounded ${page === 'despesas' ? 'bg-white text-purple-600' : 'bg-purple-500'}`}>
+            💰 Despesas
+          </button>
+          <button 
+            onClick={() => setPage('clientes')} 
+            className={`px-4 py-2 rounded ${page === 'clientes' ? 'bg-white text-purple-600' : 'bg-purple-500'}`}>
+            👥 Clientes
+          </button>
+          <button 
+            onClick={() => setPage('historico')} 
+            className={`px-4 py-2 rounded ${page === 'historico' ? 'bg-white text-purple-600' : 'bg-purple-500'}`}>
+            📜 Histórico
+          </button>
+          <button 
+            onClick={() => setPage('relatorio')} 
+            className={`px-4 py-2 rounded ${page === 'relatorio' ? 'bg-white text-purple-600' : 'bg-purple-500'}`}>
+            📊 Fechamento
+          </button>
+          <button 
+            onClick={() => setPage('cobranca')} 
+            className={`px-4 py-2 rounded ${page === 'cobranca' ? 'bg-white text-purple-600' : 'bg-purple-500'}`}>
+            🧾 Relação de Cobrança
+          </button>
+          <button 
+            onClick={() => setPage('config')} 
+            className={`px-4 py-2 rounded ${page === 'config' ? 'bg-white text-purple-600' : 'bg-purple-500'}`}>
+            ⚙️ Configurações
+          </button>
+          <button 
+            onClick={() => { setToken(''); setLoggedEmail(''); localStorage.removeItem('token'); localStorage.removeItem('loggedEmail'); }} 
+            className="px-4 py-2 bg-red-500 rounded hover:bg-red-600">
+            🚪 Sair
+          </button>
+        </div>
+      </nav>
+
+      {/* Modal de Compartilhamento após Pagamento */}
+      {shareModalData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-800">✅ Pagamento Registrado!</h3>
+              <button onClick={() => setShareModalData(null)} className="text-gray-500 hover:text-gray-700">✖</button>
+            </div>
+            <p className="text-gray-600 mb-4">{shareModalData.message || 'Deseja enviar o carnê atualizado?'}</p>
+            <ShareCarneModal 
+              sale={shareModalData.sale} 
+              client={shareModalData.client} 
+              onClose={() => setShareModalData(null)} 
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-7xl mx-auto p-6">
+        {page === 'dashboard' && (
+          <div>
+            {/* Cards de Estatísticas */}
+            {stats && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div 
+                  onClick={() => openStatsModal('vendas')}
+                  className="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl hover:scale-105 transition-all">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-500 text-sm">Total de Vendas</p>
+                      <p className="text-3xl font-bold text-purple-600">{stats.totalSales}</p>
+                    </div>
+                    <div className="text-4xl">🛍️</div>
+                  </div>
+                </div>
+
+                <div 
+                  onClick={() => openStatsModal('receita')}
+                  className="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl hover:scale-105 transition-all">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-500 text-sm">Receita Total</p>
+                      <p className="text-2xl font-bold text-green-600">{formatCurrency(stats.totalRevenue)}</p>
+                    </div>
+                    <div className="text-4xl">💵</div>
+                  </div>
+                </div>
+
+                <div 
+                  onClick={() => openStatsModal('despesas')}
+                  className="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl hover:scale-105 transition-all">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-500 text-sm">Despesas</p>
+                      <p className="text-2xl font-bold text-red-600">{formatCurrency(stats.totalExpenses)}</p>
+                    </div>
+                    <div className="text-4xl">💸</div>
+                  </div>
+                </div>
+
+                <div 
+                  onClick={() => openStatsModal('saldo')}
+                  className="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl hover:scale-105 transition-all">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-500 text-sm">Saldo</p>
+                      <p className="text-2xl font-bold text-blue-600">{formatCurrency(stats.balance)}</p>
+                    </div>
+                    <div className="text-4xl">💰</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Gráfico de Receita Mensal */}
+            <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">📈 Receita Mensal (2025)</h2>
+              <div className="flex items-end justify-between h-64 gap-2">
+                {monthlyRevenue.map((value, index) => {
+                  const maxValue = Math.max(...monthlyRevenue, 1);
+                  const height = (value / maxValue) * 100;
+                  const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                  
+                  return (
+                    <div key={index} className="flex-1 flex flex-col items-center">
+                      <div className="w-full bg-gradient-to-t from-purple-600 to-blue-500 rounded-t" 
+                           style={{ height: `${height}%`, minHeight: value > 0 ? '20px' : '0' }}>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-2">{months[index]}</p>
+                      <p className="text-xs text-gray-400">{value > 0 ? formatCurrency(value) : '-'}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Previsão de Recebimentos */}
+            {forecastData.length > 0 && (
+              <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+                <h2 className="text-xl font-bold text-gray-800 mb-4">📅 Previsão de Recebimentos ({new Date().getFullYear()})</h2>
+                <p className="text-sm text-gray-600 mb-4">Parcelas pendentes a receber em cada mês</p>
+                
+                {/* Cards de resumo */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-blue-50 p-4 rounded-lg text-center">
+                    <p className="text-xs text-gray-600">Total Previsto</p>
+                    <p className="text-lg font-bold text-blue-600">{formatCurrency(forecastData[11]?.accumulated || 0)}</p>
+                  </div>
+                  <div className="bg-green-50 p-4 rounded-lg text-center">
+                    <p className="text-xs text-gray-600">Mês Atual</p>
+                    <p className="text-lg font-bold text-green-600">{formatCurrency(forecastData[new Date().getMonth()]?.value || 0)}</p>
+                  </div>
+                  <div className="bg-purple-50 p-4 rounded-lg text-center">
+                    <p className="text-xs text-gray-600">Próximo Mês</p>
+                    <p className="text-lg font-bold text-purple-600">{formatCurrency(forecastData[Math.min(new Date().getMonth() + 1, 11)]?.value || 0)}</p>
+                  </div>
+                  <div className="bg-orange-50 p-4 rounded-lg text-center">
+                    <p className="text-xs text-gray-600">Média Mensal</p>
+                    <p className="text-lg font-bold text-orange-600">{formatCurrency((forecastData[11]?.accumulated || 0) / 12)}</p>
+                  </div>
+                </div>
+
+                {/* Tabela de previsão */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="text-left p-2 rounded-tl-lg">Mês</th>
+                        <th className="text-center p-2">Parcelas</th>
+                        <th className="text-right p-2">A Receber</th>
+                        <th className="text-right p-2 rounded-tr-lg">Acumulado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {forecastData.map((item, index) => {
+                        const isCurrentMonth = index === new Date().getMonth();
+                        const isPast = index < new Date().getMonth();
+                        const expanded = expandedMonths.includes(index);
+                        const toggleExpand = () => {
+                          if (expanded) {
+                            setExpandedMonths(expandedMonths.filter(m => m !== index));
+                          } else {
+                            setExpandedMonths([...expandedMonths, index]);
+                          }
+                        };
+                        return (
+                          <Fragment key={item.month}>
+                            <tr 
+                              className={`border-b cursor-pointer hover:bg-gray-50 ${isCurrentMonth ? 'bg-blue-50 font-semibold' : isPast ? 'text-gray-400' : ''}`}
+                              onClick={() => item.installments && item.installments.length > 0 && toggleExpand()}
+                            >
+                              <td className="p-2">
+                                {item.installments && item.installments.length > 0 && (
+                                  <span className="mr-2">{expanded ? '▼' : '▶'}</span>
+                                )}
+                                {isCurrentMonth && '👉 '}{item.month}
+                                {isCurrentMonth && <span className="text-xs ml-1 text-blue-600">(atual)</span>}
+                              </td>
+                              <td className="text-center p-2">
+                                {item.installments?.length || 0}
+                              </td>
+                              <td className={`text-right p-2 ${item.value > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                                {item.value > 0 ? formatCurrency(item.value) : '-'}
+                              </td>
+                              <td className="text-right p-2 text-blue-600 font-medium">
+                                {formatCurrency(item.accumulated)}
+                              </td>
+                            </tr>
+                            {expanded && item.installments && item.installments.map((inst: any) => (
+                              <tr key={inst.id} className="bg-gray-50 text-xs">
+                                <td className="p-2 pl-8" colSpan={2}>
+                                  <span className="font-medium">{inst.sale?.client?.name || 'Cliente'}</span>
+                                  <span className="text-gray-500 ml-2">- {inst.sale?.itemName}</span>
+                                  <span className="text-gray-400 ml-2">(Parcela {inst.sequence})</span>
+                                </td>
+                                <td className="p-2 text-right">
+                                  {editingInstallment?.id === inst.id ? (
+                                    <input 
+                                      type="number" 
+                                      step="0.01"
+                                      className="w-20 p-1 border rounded text-right"
+                                      defaultValue={inst.amount}
+                                      onBlur={(e) => {
+                                        handleEditInstallment(inst.id, parseFloat(e.target.value));
+                                        setEditingInstallment(null);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          handleEditInstallment(inst.id, parseFloat((e.target as HTMLInputElement).value));
+                                          setEditingInstallment(null);
+                                        }
+                                        if (e.key === 'Escape') setEditingInstallment(null);
+                                      }}
+                                      autoFocus
+                                    />
+                                  ) : (
+                                    <span 
+                                      className="text-green-600 cursor-pointer hover:bg-green-100 px-2 py-1 rounded"
+                                      onClick={(e) => { e.stopPropagation(); setEditingInstallment(inst); }}
+                                      title="Clique para editar"
+                                    >
+                                      {formatCurrency(inst.amount)} ✏️
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-2 text-right text-gray-400">
+                                  {new Date(inst.dueDate).toLocaleDateString('pt-BR')}
+                                </td>
+                              </tr>
+                            ))}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gradient-to-r from-green-100 to-blue-100 font-bold">
+                        <td className="p-3 rounded-bl-lg" colSpan={2}>🎯 Total do Ano</td>
+                        <td className="text-right p-3 text-green-700">
+                          {formatCurrency(forecastData.reduce((acc, item) => acc + item.value, 0))}
+                        </td>
+                        <td className="text-right p-3 text-blue-700 rounded-br-lg">
+                          {formatCurrency(forecastData[11]?.accumulated || 0)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Vendas Recentes */}
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h2 className="text-xl font-bold text-gray-800 mb-4">🛍️ Vendas Recentes</h2>
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {recentSales.map((sale: any) => (
+                    <div 
+                      key={sale.id} 
+                      className="border-l-4 border-purple-600 pl-4 py-2 bg-gray-50 rounded cursor-pointer hover:bg-purple-50 transition"
+                      onClick={() => sale.client?.id && openClientModal(sale.client.id)}
+                    >
+                      <p className="font-semibold text-gray-800">{sale.itemName}</p>
+                      <p className="text-sm text-gray-600 hover:text-purple-600">{sale.client?.name || 'Cliente não encontrado'}</p>
+                      <div className="flex justify-between items-center mt-1">
+                        <span className="text-green-600 font-bold">{formatCurrency(sale.totalValue)}</span>
+                        <span className="text-xs text-gray-500">{formatDate(sale.saleDate)}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {recentSales.length === 0 && (
+                    <p className="text-gray-400 text-center py-8">Nenhuma venda registrada ainda</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Parcelas a Vencer */}
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h2 className="text-xl font-bold text-gray-800 mb-4">⏰ Parcelas a Vencer (30 dias)</h2>
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {pendingInstallments.map((inst: any) => {
+                    const daysUntilDue = Math.ceil((new Date(inst.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                    const isOverdue = daysUntilDue < 0;
+                    const isDueSoon = daysUntilDue >= 0 && daysUntilDue <= 3;
+                    
+                    return (
+                      <div 
+                        key={inst.id} 
+                        className={`border-l-4 pl-4 py-2 rounded cursor-pointer hover:opacity-80 transition ${
+                          isOverdue ? 'border-red-600 bg-red-50' : 
+                          isDueSoon ? 'border-yellow-600 bg-yellow-50' : 
+                          'border-blue-600 bg-blue-50'
+                        }`}
+                        onClick={() => inst.sale.client?.id && openClientModal(inst.sale.client.id)}
+                      >
+                        <p className="font-semibold text-gray-800 hover:text-purple-600">
+                          {inst.sale.client?.name || 'Cliente não encontrado'} - Parcela {inst.sequence}/{inst.sale.installments}
+                        </p>
+                        <p className="text-sm text-gray-600">{inst.sale.itemName}</p>
+                        <div className="flex justify-between items-center mt-2">
+                          <span className="font-bold text-gray-800">{formatCurrency(inst.amount)}</span>
+                          <span className={`text-xs ${isOverdue ? 'text-red-600' : isDueSoon ? 'text-yellow-600' : 'text-blue-600'}`}>
+                            {isOverdue ? `Atrasado ${Math.abs(daysUntilDue)} dias` :
+                             isDueSoon ? `Vence em ${daysUntilDue} dias` :
+                             formatDate(inst.dueDate)}
+                          </span>
+                        </div>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setPaymentModalInstallment(inst); }}
+                          className="mt-2 w-full bg-green-500 text-white text-sm py-1 rounded hover:bg-green-600">
+                          ✓ Marcar como Pago
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {pendingInstallments.length === 0 && (
+                    <p className="text-gray-400 text-center py-8">Nenhuma parcela pendente</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {page === 'vendas' && <NovaVendaPage token={token} onSuccess={() => setPage('dashboard')} clients={clients} />}
+        {page === 'despesas' && <DespesasPage token={token} />}
+        {page === 'clientes' && <ClientesPage token={token} clients={filteredClients} clientSearch={clientSearch} handleClientSearch={handleClientSearch} handleImportClients={handleImportClients} openClientModal={openClientModal} handleDeleteAllClients={handleDeleteAllClients} />}
+        {page === 'historico' && <HistoricoPage token={token} openClientModal={openClientModal} />}
+        {page === 'cobranca' && <CobrancaPage token={token} />}
+        {page === 'relatorio' && <RelatorioPage token={token} clients={clients} />}
+        {page === 'config' && <ConfigPage token={token} />}
+      </div>
+
+      {/* Modal do Carnê */}
+      {selectedClientForModal && (
+        <CarneModal 
+          client={selectedClientForModal} 
+          sales={clientSalesForModal} 
+          onClose={closeClientModal}
+          token={token}
+          onUpdateClient={handleUpdateClient}
+          onMarkPaid={(inst) => {
+            setPaymentModalInstallment({
+              ...inst,
+              sale: {
+                itemName: clientSalesForModal.find(s => s.id === inst.saleId)?.itemName || 'Item',
+                client: selectedClientForModal
+              }
+            });
+          }}
+        />
+      )}
+
+      {/* Modal de Pagamento */}
+      {paymentModalInstallment && (
+        <PaymentModal
+          installment={paymentModalInstallment}
+          onConfirm={markAsPaid}
+          onClose={() => setPaymentModalInstallment(null)}
+        />
+      )}
+
+      {/* Modal de Estatísticas */}
+      {statsModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+            <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold">
+                  {statsModal === 'vendas' && '🛍️ Todas as Vendas'}
+                  {statsModal === 'receita' && '💵 Detalhes da Receita'}
+                  {statsModal === 'despesas' && '💸 Todas as Despesas'}
+                  {statsModal === 'saldo' && '💰 Resumo Financeiro'}
+                </h2>
+                <button 
+                  onClick={() => setStatsModal(null)} 
+                  className="text-3xl hover:bg-white/20 rounded-full w-10 h-10 flex items-center justify-center"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {/* Vendas */}
+              {statsModal === 'vendas' && (
+                <div>
+                  <p className="text-gray-600 mb-4">Total de {allSales.length} venda(s) registrada(s)</p>
+                  <div className="space-y-3">
+                    {allSales.map((sale: any) => (
+                      <div key={sale.id} className="bg-gray-50 p-4 rounded-lg border">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold text-purple-700">{sale.itemName}</p>
+                            <p className="text-sm text-gray-600">👤 {sale.client?.name || 'Cliente não identificado'}</p>
+                            <p className="text-sm text-gray-500">📅 {new Date(sale.date).toLocaleDateString('pt-BR')}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-green-600">{formatCurrency(sale.totalValue)}</p>
+                            <p className="text-xs text-gray-500">{sale.installments?.length || 0} parcela(s)</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {allSales.length === 0 && (
+                      <p className="text-center text-gray-500 py-8">Nenhuma venda registrada</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Receita */}
+              {statsModal === 'receita' && (
+                <div>
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="bg-green-50 p-4 rounded-lg text-center">
+                      <p className="text-sm text-gray-600">Total em Vendas</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {formatCurrency(allSales.reduce((acc: number, s: any) => acc + (s.totalValue || 0), 0))}
+                      </p>
+                    </div>
+                    <div className="bg-blue-50 p-4 rounded-lg text-center">
+                      <p className="text-sm text-gray-600">Parcelas Pagas</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {formatCurrency(allSales.reduce((acc: number, s: any) => 
+                          acc + (s.installmentsR?.filter((i: any) => i.paid).reduce((a: number, i: any) => a + (i.amount || 0), 0) || 0), 0))}
+                      </p>
+                    </div>
+                  </div>
+                  <h3 className="font-semibold text-gray-700 mb-3">📊 Por Cliente</h3>
+                  <div className="space-y-2">
+                    {Object.entries(allSales.reduce((acc: any, s: any) => {
+                      const name = s.client?.name || 'Sem cliente';
+                      acc[name] = (acc[name] || 0) + (s.totalValue || 0);
+                      return acc;
+                    }, {})).sort((a: any, b: any) => b[1] - a[1]).map(([name, value]: any) => (
+                      <div key={name} className="flex justify-between items-center bg-gray-50 p-3 rounded">
+                        <span className="text-gray-700">👤 {name}</span>
+                        <span className="font-semibold text-green-600">{formatCurrency(value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Despesas */}
+              {statsModal === 'despesas' && (
+                <div>
+                  <p className="text-gray-600 mb-4">Total de {allExpenses.length} despesa(s)</p>
+                  <div className="space-y-3">
+                    {allExpenses.map((exp: any) => (
+                      <div key={exp.id} className="bg-red-50 p-4 rounded-lg border border-red-100">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold text-red-700">{exp.description}</p>
+                            <p className="text-sm text-gray-500">📅 {new Date(exp.date).toLocaleDateString('pt-BR')}</p>
+                          </div>
+                          <p className="font-bold text-red-600">{formatCurrency(exp.value)}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {allExpenses.length === 0 && (
+                      <p className="text-center text-gray-500 py-8">Nenhuma despesa registrada</p>
+                    )}
+                  </div>
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold text-gray-700">Total de Despesas:</span>
+                      <span className="text-xl font-bold text-red-600">
+                        {formatCurrency(allExpenses.reduce((acc: number, e: any) => acc + (e.value || 0), 0))}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Saldo */}
+              {statsModal === 'saldo' && (
+                <div>
+                  <div className="space-y-4">
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <div className="flex justify-between items-center">
+                        <span className="text-green-700">💵 Receita Total (Vendas)</span>
+                        <span className="text-xl font-bold text-green-600">
+                          {formatCurrency(allSales.reduce((acc: number, s: any) => acc + (s.totalValue || 0), 0))}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="bg-red-50 p-4 rounded-lg">
+                      <div className="flex justify-between items-center">
+                        <span className="text-red-700">💸 Despesas Total</span>
+                        <span className="text-xl font-bold text-red-600">
+                          {formatCurrency(allExpenses.reduce((acc: number, e: any) => acc + (e.value || 0), 0))}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="bg-blue-100 p-4 rounded-lg border-2 border-blue-300">
+                      <div className="flex justify-between items-center">
+                        <span className="text-blue-800 font-semibold">💰 Saldo Final</span>
+                        <span className="text-2xl font-bold text-blue-600">
+                          {formatCurrency(
+                            allSales.reduce((acc: number, s: any) => acc + (s.totalValue || 0), 0) -
+                            allExpenses.reduce((acc: number, e: any) => acc + (e.value || 0), 0)
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 pt-4 border-t">
+                    <h3 className="font-semibold text-gray-700 mb-3">📈 Resumo</h3>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="bg-gray-50 p-3 rounded">
+                        <p className="text-gray-600">Total de Vendas</p>
+                        <p className="font-bold text-purple-600">{allSales.length}</p>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded">
+                        <p className="text-gray-600">Total de Despesas</p>
+                        <p className="font-bold text-red-600">{allExpenses.length}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-gray-100 p-4">
+              <button 
+                onClick={() => setStatsModal(null)}
+                className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess: () => void, clients: any[] }) {
+  const [selectedClient, setSelectedClient] = useState<any>(null);
+  const [clientName, setClientName] = useState('');
+  const [clientPhone, setClientPhone] = useState('');
+  const [clientCpf, setClientCpf] = useState('');
+  const [clientAddress, setClientAddress] = useState('');
+  const [clientCity, setClientCity] = useState('');
+  const [clientRg, setClientRg] = useState('');
+  const [clientBillingAddress, setClientBillingAddress] = useState('');
+  const [clientFilter, setClientFilter] = useState('');
+  const [showNewClient, setShowNewClient] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [itemName, setItemName] = useState('');
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [createdSale, setCreatedSale] = useState<any>(null);
+  const [createdClient, setCreatedClient] = useState<any>(null);
+  const [itemCode, setItemCode] = useState('');
+  const [factor, setFactor] = useState('');
+  const [itemType, setItemType] = useState<'leilao' | 'novo'>('leilao');
+  const [baseValue, setBaseValue] = useState('');
+  const [totalValue, setTotalValue] = useState('');
+  const [installments, setInstallments] = useState(1);
+  const [photo, setPhoto] = useState('');
+  const [sendCard, setSendCard] = useState(true);
+  const [roundUpInstallments, setRoundUpInstallments] = useState(false);
+  const [customInstallmentValues, setCustomInstallmentValues] = useState<number[]>([]);
+
+  // Recalcular valores das parcelas quando mudar número de parcelas ou valor total
+  useEffect(() => {
+    if (installments > 0 && totalValue && parseFloat(totalValue) > 0) {
+      const total = parseFloat(totalValue);
+      const parcelaExata = total / installments;
+      const parcelaArredondada = Math.ceil(parcelaExata);
+      const somaArredondada = parcelaArredondada * (installments - 1);
+      const ultimaParcelaArredondada = total - somaArredondada;
+      
+      const valores = [];
+      for (let i = 0; i < installments; i++) {
+        if (roundUpInstallments) {
+          valores.push(i === installments - 1 ? ultimaParcelaArredondada : parcelaArredondada);
+        } else {
+          valores.push(parcelaExata);
+        }
+      }
+      setCustomInstallmentValues(valores);
+    }
+  }, [installments, totalValue, roundUpInstallments]);
+
+  // Calcular valor automaticamente quando factor ou baseValue mudar
+  useEffect(() => {
+    const factorNum = parseFloat(factor);
+    const baseNum = parseFloat(baseValue);
+    if (!isNaN(factorNum) && !isNaN(baseNum) && factorNum > 0 && baseNum > 0) {
+      setTotalValue((factorNum * baseNum).toFixed(2));
+    }
+  }, [factor, baseValue]);
+
+  const normalizedFilter = clientFilter.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+  const phoneFilter = clientFilter.replace(/\D/g, '');
+  const filteredClientsList = clients
+    .filter(c => {
+      const nameNorm = c.name.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+      return (
+        (normalizedFilter && (nameNorm.startsWith(normalizedFilter) || nameNorm.includes(normalizedFilter))) ||
+        (phoneFilter && (c.phone.startsWith(phoneFilter) || c.phone.includes(phoneFilter)))
+      );
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+  const handleSelectClient = (client: any) => {
+    setSelectedClient(client);
+    setClientName(client.name);
+    setClientPhone(client.phone);
+    setClientFilter('');
+    setShowNewClient(false);
+    setShowSuggestions(false);
+  };
+
+  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setPhoto(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = async () => {
+    if (!clientName || !itemName || !totalValue) {
+      alert('Preencha cliente, item e valor');
+      return;
+    }
+
+    try {
+      let clientId = selectedClient?.id;
+      
+      // Se não selecionou cliente, precisa criar
+      if (!clientId) {
+        const clientRes = await fetch('/api/clients', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ 
+            name: clientName, 
+            phone: clientPhone || '0000000000',
+            cpf: clientCpf || null,
+            rg: clientRg || null,
+            city: clientCity || null,
+            address: clientAddress || null,
+            billingAddress: clientBillingAddress || null
+          })
+        });
+        
+        if (!clientRes.ok) {
+          alert('Erro ao criar/buscar cliente');
+          return;
+        }
+        
+        const client = await clientRes.json();
+        clientId = client.id;
+      }
+      
+      const res = await fetch('/api/sales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          clientId,
+          itemName,
+          itemCode: itemCode || null,
+          factor: factor ? parseFloat(factor) : null,
+          itemType: itemType || null,
+          baseValue: baseValue ? parseFloat(baseValue) : null,
+          totalValue: parseFloat(totalValue),
+          paymentMethod: 'Parcelado',
+          installments,
+          roundUpInstallments: roundUpInstallments && installments > 1,
+          customInstallmentValues: customInstallmentValues.length === installments ? customInstallmentValues : null,
+          saleDate: new Date(),
+          imageBase64: photo,
+          sendCard: sendCard && installments > 1
+        })
+      });
+      
+      if (res.ok) {
+        const saleData = await res.json();
+        
+        // Buscar dados completos da venda com parcelas
+        const saleRes = await fetch(`/api/clients/${clientId}/sales`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const sales = await saleRes.json();
+        const fullSale = sales.find((s: any) => s.id === saleData.id) || {
+          ...saleData,
+          installmentsR: Array.from({ length: installments }, (_, i) => ({
+            sequence: i + 1,
+            amount: parseFloat(totalValue) / installments,
+            dueDate: new Date(new Date().setMonth(new Date().getMonth() + i)),
+            paid: false
+          }))
+        };
+        
+        // Guardar dados para o modal
+        setCreatedSale(fullSale);
+        setCreatedClient({ 
+          id: clientId, 
+          name: clientName, 
+          phone: clientPhone || selectedClient?.phone || ''
+        });
+        setShowShareModal(true);
+        
+        // Limpar formulário
+        setSelectedClient(null);
+        setClientName('');
+        setClientPhone('');
+        setClientFilter('');
+        setShowNewClient(false);
+        setItemName('');
+        setItemCode('');
+        setFactor('');
+        setItemType('leilao');
+        setBaseValue('');
+        setTotalValue('');
+        setPhoto('');
+        setRoundUpInstallments(false);
+        setInstallments(1);
+        setCustomInstallmentValues([]);
+        setClientCpf('');
+        setClientRg('');
+        setClientCity('');
+        setClientAddress('');
+        setClientBillingAddress('');
+      } else {
+        const error = await res.json();
+        alert('Erro ao registrar venda: ' + (error.message || 'Erro desconhecido'));
+      }
+    } catch (error) {
+      alert('Erro: ' + error);
+    }
+  };
+
+  const handleCloseShareModal = () => {
+    setShowShareModal(false);
+    setCreatedSale(null);
+    setCreatedClient(null);
+    onSuccess();
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-lg p-6">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">➕ Registrar Nova Venda</h2>
+
+      {/* Modal de Compartilhamento */}
+      {showShareModal && createdSale && createdClient && (
+        <ShareCarneModal 
+          sale={createdSale} 
+          client={createdClient} 
+          onClose={handleCloseShareModal} 
+        />
+      )}
+      
+      {/* Seleção de Cliente */}
+      <div className="mb-6">
+        <label className="block font-semibold mb-2">👥 Cliente</label>
+        {selectedClient ? (
+          <div className="flex gap-2 items-center">
+            <div className="flex-1 bg-purple-50 border-2 border-purple-300 p-3 rounded-lg">
+              <p className="font-semibold text-gray-800">{selectedClient.name}</p>
+              <p className="text-sm text-gray-600">{selectedClient.phone}</p>
+            </div>
+            <button 
+              onClick={() => {
+                setSelectedClient(null);
+                setClientName('');
+                setClientPhone('');
+                setClientFilter('');
+              }}
+              className="bg-red-500 text-white px-3 py-3 rounded-lg hover:bg-red-600">
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div className="relative">
+            <input 
+              type="text" 
+              placeholder="🔍 Digite o nome ou telefone do cliente..." 
+              className="w-full p-3 border-2 border-gray-300 rounded-lg mb-2 focus:border-purple-500 focus:outline-none"
+              value={clientFilter}
+              onChange={(e) => {
+                setClientFilter(e.target.value);
+                setShowSuggestions(true);
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              autoComplete="off"
+            />
+            {showSuggestions && clientFilter && filteredClientsList.length > 0 && (
+              <div className="absolute z-10 w-full border-2 border-purple-300 rounded-lg bg-white shadow-xl max-h-64 overflow-y-auto">
+                <div className="sticky top-0 bg-purple-50 px-3 py-2 border-b border-purple-200">
+                  <p className="text-xs font-semibold text-purple-700">
+                    {filteredClientsList.length} cliente(s) encontrado(s)
+                  </p>
+                </div>
+                {filteredClientsList.slice(0, 10).map(client => (
+                  <button
+                    key={client.id}
+                    onClick={() => {
+                      handleSelectClient(client);
+                      setShowSuggestions(false);
+                    }}
+                    className="w-full text-left p-3 hover:bg-purple-50 border-b last:border-b-0 transition"
+                  >
+                    <p className="font-semibold text-gray-800">{client.name}</p>
+                    <p className="text-sm text-gray-600">{client.phone}</p>
+                    {client.city && <p className="text-xs text-gray-500">📍 {client.city}</p>}
+                  </button>
+                ))}
+                {filteredClientsList.length > 10 && (
+                  <div className="p-2 text-center text-xs text-gray-500 bg-gray-50">
+                    + {filteredClientsList.length - 10} cliente(s) a mais... Continue digitando para refinar
+                  </div>
+                )}
+              </div>
+            )}
+            {!showNewClient && (
+              <button
+                onClick={() => setShowNewClient(true)}
+                className="w-full mt-2 bg-blue-50 text-blue-600 p-3 rounded-lg border border-blue-200 hover:bg-blue-100 font-semibold"
+              >
+                + Criar Novo Cliente
+              </button>
+            )}
+          </div>
+        )}
+        
+        {showNewClient && !selectedClient && (
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <h3 className="font-semibold text-gray-800 mb-3">Novo Cliente</h3>
+            <input 
+              type="text" 
+              placeholder="Nome do cliente" 
+              className="w-full p-2 border rounded-lg mb-2"
+              value={clientName}
+              onChange={(e) => setClientName(e.target.value)}
+            />
+            <input 
+              type="tel" 
+              placeholder="Telefone/WhatsApp" 
+              className="w-full p-2 border rounded-lg mb-2"
+              value={clientPhone}
+              onChange={(e) => setClientPhone(e.target.value)}
+            />
+            <input 
+              type="text" 
+              placeholder="CPF (opcional)" 
+              className="w-full p-2 border rounded-lg mb-2"
+              value={clientCpf}
+              onChange={(e) => setClientCpf(e.target.value)}
+            />
+            <input 
+              type="text" 
+              placeholder="RG (opcional)" 
+              className="w-full p-2 border rounded-lg mb-2"
+              value={clientRg}
+              onChange={(e) => setClientRg(e.target.value)}
+            />
+            <input 
+              type="text" 
+              placeholder="Cidade (opcional)" 
+              className="w-full p-2 border rounded-lg mb-2"
+              value={clientCity}
+              onChange={(e) => setClientCity(e.target.value)}
+            />
+            <textarea 
+              placeholder="Endereço completo (opcional)" 
+              className="w-full p-2 border rounded-lg mb-2 h-20 resize-none"
+              value={clientAddress}
+              onChange={(e) => setClientAddress(e.target.value)}
+            />
+            <textarea 
+              placeholder="Endereço de cobrança (rua, número, cidade)" 
+              className="w-full p-2 border rounded-lg mb-2 h-20 resize-none"
+              value={clientBillingAddress}
+              onChange={(e) => setClientBillingAddress(e.target.value)}
+            />
+            <button
+              onClick={() => setShowNewClient(false)}
+              className="w-full mt-2 bg-gray-300 text-gray-700 p-2 rounded-lg hover:bg-gray-400"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="mb-4">
+        <label className="block font-semibold mb-2">💎 Joia</label>
+        <input type="text" className="w-full p-3 border rounded-lg" placeholder="Nome da peça" value={itemName} onChange={(e) => setItemName(e.target.value)} />
+      </div>
+
+      {/* Calculadora de Valor */}
+      <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-200 rounded-xl">
+        <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+          🧮 Calculadora de Valor
+        </h3>
+        
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="block text-sm font-semibold mb-1 text-gray-700">Código da Peça</label>
+            <input 
+              type="text" 
+              className="w-full p-2 border rounded-lg" 
+              placeholder="Ex: P-1234, ABC..." 
+              value={itemCode} 
+              onChange={(e) => setItemCode(e.target.value)} 
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-semibold mb-1 text-gray-700">Fator (Fixo)</label>
+            <input 
+              type="number" 
+              step="0.1"
+              className="w-full p-2 border rounded-lg" 
+              placeholder="Ex: 3.5" 
+              value={factor} 
+              onChange={(e) => setFactor(e.target.value)} 
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="block text-sm font-semibold mb-1 text-gray-700">Tipo</label>
+            <select 
+              className="w-full p-2 border rounded-lg"
+              value={itemType}
+              onChange={(e) => setItemType(e.target.value as 'leilao' | 'novo')}
+              title="Tipo do item"
+            >
+              <option value="leilao">🔨 Leilão</option>
+              <option value="novo">✨ Novo</option>
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-semibold mb-1 text-gray-700">Valor Base (R$)</label>
+            <input 
+              type="number" 
+              step="0.01"
+              className="w-full p-2 border rounded-lg" 
+              placeholder="0.00" 
+              value={baseValue} 
+              onChange={(e) => setBaseValue(e.target.value)} 
+            />
+          </div>
+        </div>
+
+        {factor && baseValue && (
+          <div className="bg-white p-3 rounded-lg border-2 border-green-400">
+            <p className="text-sm text-gray-600 mb-1">
+              <strong>Cálculo:</strong> {factor} × R$ {parseFloat(baseValue).toFixed(2)} = 
+            </p>
+            <p className="text-2xl font-bold text-green-600">
+              R$ {totalValue}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="mb-4">
+        <label className="block font-semibold mb-2">💰 Valor Total (R$)</label>
+        <input 
+          type="number" 
+          className="w-full p-3 border rounded-lg bg-gray-50" 
+          placeholder="0.00" 
+          value={totalValue} 
+          onChange={(e) => setTotalValue(e.target.value)}
+          title="Calculado automaticamente ou digite manualmente"
+        />
+        <p className="text-xs text-gray-500 mt-1">Calculado automaticamente ou edite manualmente</p>
+      </div>
+
+      <div className="mb-4">
+        <label className="block font-semibold mb-2">📊 Parcelas</label>
+        <input type="number" className="w-full p-3 border rounded-lg" min="1" value={installments} onChange={(e) => setInstallments(parseInt(e.target.value))} title="Número de parcelas" placeholder="Número de parcelas" />
+      </div>
+
+      {/* Preview das Parcelas com Opção de Arredondamento */}
+      {installments > 1 && totalValue && parseFloat(totalValue) > 0 && (() => {
+        const total = parseFloat(totalValue);
+        const parcelaExata = total / installments;
+        const parcelaArredondada = Math.ceil(parcelaExata);
+        const somaArredondada = parcelaArredondada * (installments - 1);
+        const ultimaParcelaArredondada = total - somaArredondada;
+        
+        // Gerar lista de parcelas para preview
+        const parcelasPreview = [];
+        const hoje = new Date();
+        for (let i = 0; i < installments; i++) {
+          const vencimento = new Date(hoje);
+          vencimento.setMonth(vencimento.getMonth() + i);
+          
+          let valor;
+          if (roundUpInstallments) {
+            valor = i === installments - 1 ? ultimaParcelaArredondada : parcelaArredondada;
+          } else {
+            valor = parcelaExata;
+          }
+          
+          parcelasPreview.push({
+            numero: i + 1,
+            valor,
+            vencimento
+          });
+        }
+        
+        const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        
+        return (
+          <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl">
+            <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+              📋 Preview das Parcelas
+              <span className="text-sm font-normal text-gray-500">({installments} parcelas)</span>
+            </h4>
+            
+            {/* Opção de Arredondamento */}
+            <label className="flex items-center gap-3 cursor-pointer mb-4 p-3 bg-white rounded-lg border-2 border-blue-200 hover:border-blue-400 transition">
+              <input 
+                type="checkbox" 
+                checked={roundUpInstallments} 
+                onChange={(e) => setRoundUpInstallments(e.target.checked)}
+                className="w-6 h-6 accent-blue-500"
+              />
+              <div className="flex-1">
+                <span className="font-semibold text-blue-700">⬆️ Arredondar parcelas para cima</span>
+                <p className="text-xs text-blue-600">Parcelas de R$ {parcelaArredondada.toFixed(2)} e última de R$ {ultimaParcelaArredondada.toFixed(2)}</p>
+              </div>
+            </label>
+            
+            {/* Resumo */}
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className={`p-3 rounded-lg border-2 ${!roundUpInstallments ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
+                <p className="text-xs text-gray-500 uppercase">Valor Exato</p>
+                <p className="font-bold text-lg text-gray-800">{installments}x R$ {parcelaExata.toFixed(2)}</p>
+              </div>
+              <div className={`p-3 rounded-lg border-2 ${roundUpInstallments ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
+                <p className="text-xs text-gray-500 uppercase">Arredondado</p>
+                <p className="font-bold text-lg text-gray-800">{installments - 1}x R$ {parcelaArredondada.toFixed(2)}</p>
+                <p className="text-xs text-green-600">+ 1x R$ {ultimaParcelaArredondada.toFixed(2)}</p>
+              </div>
+            </div>
+            
+            {/* Tabela de Parcelas */}
+            <div className="bg-white rounded-lg border overflow-hidden">
+              <div className="bg-gray-100 px-3 py-2 border-b">
+                <p className="text-sm font-semibold text-gray-700">📅 Cronograma de Pagamentos</p>
+              </div>
+              <div className="max-h-48 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="text-left p-2 border-b">Parcela</th>
+                      <th className="text-left p-2 border-b">Vencimento</th>
+                      <th className="text-right p-2 border-b">Valor (editável)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parcelasPreview.map((p, idx) => (
+                      <tr key={idx} className={customInstallmentValues[idx] !== p.valor ? 'bg-yellow-50' : (idx === installments - 1 && roundUpInstallments ? 'bg-green-50' : '')}>
+                        <td className="p-2 border-b">
+                          <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-semibold">
+                            {p.numero}/{installments}
+                          </span>
+                        </td>
+                        <td className="p-2 border-b text-gray-600">
+                          {meses[p.vencimento.getMonth()]}/{p.vencimento.getFullYear()}
+                        </td>
+                        <td className="p-2 border-b text-right">
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="w-24 p-1 border rounded text-right font-mono font-semibold"
+                            value={customInstallmentValues[idx]?.toFixed(2) || p.valor.toFixed(2)}
+                            onChange={(e) => {
+                              const newValues = [...customInstallmentValues];
+                              newValues[idx] = parseFloat(e.target.value) || 0;
+                              setCustomInstallmentValues(newValues);
+                            }}
+                            title={`Editar valor da parcela ${idx + 1}`}
+                          />
+                          {customInstallmentValues[idx] !== p.valor && (
+                            <span className="ml-1 text-xs text-yellow-600" title="Valor personalizado">✏️</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-gray-50">
+                    <tr>
+                      <td colSpan={2} className="p-2 font-semibold text-gray-700">Total</td>
+                      <td className="p-2 text-right font-bold text-green-600">
+                        R$ {customInstallmentValues.reduce((a, b) => a + b, 0).toFixed(2)}
+                        {Math.abs(customInstallmentValues.reduce((a, b) => a + b, 0) - total) > 0.01 && (
+                          <span className="ml-2 text-xs text-orange-600">
+                            (Diferença: R$ {(customInstallmentValues.reduce((a, b) => a + b, 0) - total).toFixed(2)})
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {installments > 1 && (
+        <div className="mb-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input 
+              type="checkbox" 
+              checked={sendCard} 
+              onChange={(e) => setSendCard(e.target.checked)}
+              className="w-5 h-5"
+            />
+            <span className="font-semibold">📧 Enviar cartão de parcelas pelo WhatsApp</span>
+          </label>
+          <p className="text-sm text-gray-600 ml-7 mt-1">
+            O cartão será enviado para o cliente e uma cópia para você
+          </p>
+        </div>
+      )}
+
+      <div className="mb-4">
+        <label className="block font-semibold mb-2">📸 Foto da Peça</label>
+        <input type="file" accept="image/*" className="w-full p-3 border rounded-lg" onChange={handlePhotoCapture} title="Selecione uma foto da peça" />
+        {photo && <img src={photo} className="mt-3 max-w-xs rounded-lg border" alt="Preview" />}
+      </div>
+
+      <button onClick={handleSubmit} className="w-full bg-gradient-to-r from-purple-600 to-blue-500 text-white p-4 rounded-lg font-bold text-lg hover:shadow-xl transition">
+        💾 Registrar Venda
+      </button>
+    </div>
+  );
+}
+
+function DespesasPage({ token }: { token: string }) {
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('');
+  const [amount, setAmount] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [expenses, setExpenses] = useState<any[]>([]);
+
+  useEffect(() => {
+    loadExpenses();
+  }, []);
+
+  const loadExpenses = async () => {
+    const res = await fetch('/api/expenses', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    setExpenses(await res.json());
+  };
+
+  const handleSubmit = async () => {
+    if (!description || !amount) {
+      alert('Preencha descrição e valor');
+      return;
+    }
+
+    const res = await fetch('/api/expenses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        description,
+        category,
+        amount: parseFloat(amount),
+        date,
+        paid: true
+      })
+    });
+
+    if (res.ok) {
+      alert('Despesa registrada!');
+      setDescription('');
+      setCategory('');
+      setAmount('');
+      loadExpenses();
+    }
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('pt-BR');
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">💸 Registrar Despesa</h2>
+        
+        <div className="mb-4">
+          <label className="block font-semibold mb-2">Descrição</label>
+          <input type="text" className="w-full p-3 border rounded-lg" placeholder="Ex: Aluguel, Luz, Matéria-prima" value={description} onChange={(e) => setDescription(e.target.value)} />
+        </div>
+
+        <div className="mb-4">
+          <label className="block font-semibold mb-2">Categoria</label>
+          <input type="text" className="w-full p-3 border rounded-lg" placeholder="Ex: Fixo, Variável" value={category} onChange={(e) => setCategory(e.target.value)} />
+        </div>
+
+        <div className="mb-4">
+          <label className="block font-semibold mb-2">Valor (R$)</label>
+          <input type="number" className="w-full p-3 border rounded-lg" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </div>
+
+        <div className="mb-4">
+          <label className="block font-semibold mb-2">Data</label>
+          <input type="date" className="w-full p-3 border rounded-lg" value={date} onChange={(e) => setDate(e.target.value)} title="Data da despesa" />
+        </div>
+
+        <button onClick={handleSubmit} className="w-full bg-red-600 text-white p-4 rounded-lg font-bold text-lg hover:bg-red-700 transition">
+          💾 Registrar Despesa
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">📋 Histórico de Despesas</h2>
+        <div className="space-y-3 max-h-96 overflow-y-auto">
+          {expenses.map((expense: any) => (
+            <div key={expense.id} className="border-l-4 border-red-600 pl-4 py-2 bg-red-50 rounded">
+              <p className="font-semibold text-gray-800">{expense.description}</p>
+              {expense.category && <p className="text-sm text-gray-600">{expense.category}</p>}
+              <div className="flex justify-between items-center mt-1">
+                <span className="text-red-600 font-bold">{formatCurrency(expense.amount)}</span>
+                <span className="text-xs text-gray-500">{formatDate(expense.date)}</span>
+              </div>
+            </div>
+          ))}
+          {expenses.length === 0 && (
+            <p className="text-gray-400 text-center py-8">Nenhuma despesa registrada</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ClientesPage({ token, clients, clientSearch, handleClientSearch, handleImportClients, openClientModal, handleDeleteAllClients }: { token: string, clients: any[], clientSearch: string, handleClientSearch: any, handleImportClients: any, openClientModal: (id: number) => void, handleDeleteAllClients: any }) {
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('pt-BR');
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-lg p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-800">👥 Gerenciar Clientes</h2>
+        <div className="flex gap-2">
+          <label className="bg-blue-600 text-white px-4 py-2 rounded-lg cursor-pointer hover:bg-blue-700 transition">
+            📥 Importar Contatos
+            <input 
+              type="file" 
+              accept=".csv,.json,.txt,.vcf" 
+              onChange={handleImportClients}
+              className="hidden"
+            />
+          </label>
+          {clients.length > 0 && (
+            <button
+              onClick={handleDeleteAllClients}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
+              title="Apagar todos os clientes"
+            >
+              🗑️ Limpar Tudo
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="mb-6 relative">
+        <div className="flex gap-4 items-center">
+          <div className="flex-1 relative">
+            <input 
+              type="text" 
+              placeholder="🔍 Buscar por nome ou telefone..." 
+              className="w-full p-3 border rounded-lg"
+              value={clientSearch}
+              onChange={(e) => {
+                handleClientSearch(e);
+                setShowSuggestions(true);
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              autoComplete="off"
+            />
+            {showSuggestions && clientSearch && (
+              <div className="absolute z-20 mt-1 w-full max-h-60 overflow-y-auto bg-white border-2 border-purple-200 rounded-lg shadow-xl">
+                <div className="sticky top-0 bg-purple-50 px-3 py-2 border-b border-purple-100 text-xs text-purple-700 font-semibold">
+                  {clients.length} cliente(s) encontrado(s)
+                </div>
+                {clients.slice(0, 10).map((client: any) => (
+                  <button
+                    key={client.id}
+                    onClick={() => {
+                      setShowSuggestions(false);
+                      openClientModal(client.id);
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-purple-50 border-b last:border-b-0 transition"
+                  >
+                    <p className="font-semibold text-gray-800">{client.name}</p>
+                    <p className="text-xs text-gray-600">{client.phone}</p>
+                  </button>
+                ))}
+                {clients.length > 10 && (
+                  <div className="px-3 py-2 text-xs text-gray-500 bg-gray-50 text-center">
+                    + {clients.length - 10} cliente(s) a mais... continue digitando para refinar
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="bg-purple-100 px-4 py-3 rounded-lg">
+            <p className="text-sm text-gray-600">Total de Clientes</p>
+            <p className="text-2xl font-bold text-purple-600">{clients.length}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Info de Importação */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <p className="text-sm text-blue-800 font-semibold">💡 Como importar contatos:</p>
+        <p className="text-sm text-blue-700 mt-2">
+          Você pode importar contatos em formato <strong>CSV</strong>, <strong>JSON</strong>, <strong>vCard (.vcf)</strong> ou do <strong>WhatsApp</strong>.
+        </p>
+        <p className="text-xs text-blue-600 mt-2">
+          <strong>Formatos aceitos:</strong><br/>
+          • CSV: nome,telefone,email<br/>
+          • JSON: [{'{'}name: João, phone: +5511999999999{'}'}]<br/>
+          • vCard (.vcf): padrão iCloud/contatos (FN, TEL)<br/>
+          • WhatsApp: Contact,Phone (exportar direto do app)
+        </p>
+      </div>
+
+      {/* Lista de Clientes */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {clients.length > 0 ? (
+          clients.map((client: any) => (
+            <div 
+              key={client.id} 
+              className="border-2 border-gray-200 rounded-lg p-4 hover:border-purple-400 hover:shadow-lg transition cursor-pointer"
+              onClick={() => openClientModal(client.id)}
+            >
+              <p className="font-bold text-lg text-gray-800">{client.name}</p>
+              <p className="text-sm text-gray-600 mt-1">📱 {client.phone || 'Sem telefone'}</p>
+              {client.email && <p className="text-sm text-gray-600">📧 {client.email}</p>}
+              {client.createdAt && <p className="text-xs text-gray-500 mt-2">Adicionado em {formatDate(client.createdAt)}</p>}
+              <p className="text-xs text-purple-600 mt-2 hover:underline">👆 Clique para ver carnê</p>
+            </div>
+          ))
+        ) : (
+          <div className="col-span-full text-center py-12">
+            <p className="text-gray-400 text-lg">Nenhum cliente encontrado</p>
+            <p className="text-gray-500 text-sm mt-2">Importe contatos do WhatsApp para começar</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HistoricoPage({ token, openClientModal }: { token: string, openClientModal: (id: number) => void }) {
+  const [clients, setClients] = useState<any[]>([]);
+  const [selectedClient, setSelectedClient] = useState<any>(null);
+  const [sales, setSales] = useState<any[]>([]);
+  const [allSales, setAllSales] = useState<any[]>([]);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [saleToDelete, setSaleToDelete] = useState<any>(null);
+  const [deleteReason, setDeleteReason] = useState('');
+
+  useEffect(() => {
+    loadClients();
+    loadAllSales();
+  }, []);
+
+  const loadClients = async () => {
+    const res = await fetch('/api/clients', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await res.json();
+    setClients(data);
+  };
+
+  const loadAllSales = async () => {
+    const res = await fetch('/api/sales', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await res.json();
+    setAllSales(data);
+  };
+
+  const loadClientSales = async (clientId: number) => {
+    const res = await fetch(`/api/clients/${clientId}/sales`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await res.json();
+    setSales(data);
+    const client = clients.find(c => c.id === clientId);
+    setSelectedClient(client);
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('pt-BR');
+  };
+
+  const getTotalPaid = (installments: any[]) => {
+    return installments.filter(i => i.paid).reduce((sum, i) => sum + i.amount, 0);
+  };
+
+  const getTotalPending = (installments: any[]) => {
+    return installments.filter(i => !i.paid).reduce((sum, i) => sum + i.amount, 0);
+  };
+
+  const handleDeleteClick = (sale: any) => {
+    setSaleToDelete(sale);
+    setDeleteReason('');
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteReason.trim()) {
+      alert('O motivo é obrigatório!');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/sales/${saleToDelete.id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          reason: deleteReason,
+          deletedBy: 'Usuário'
+        })
+      });
+
+      if (res.ok) {
+        // Atualizar listas
+        await loadAllSales();
+        if (selectedClient) {
+          await loadClientSales(selectedClient.id);
+        }
+        setShowDeleteModal(false);
+        setSaleToDelete(null);
+        setDeleteReason('');
+        alert('Venda excluída com sucesso!');
+      } else {
+        const error = await res.json();
+        alert(`Erro ao excluir venda: ${error.error || 'Erro desconhecido'}`);
+      }
+    } catch (error) {
+      console.error('Erro ao excluir venda:', error);
+      alert('Erro ao excluir venda');
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* Lista de Clientes */}
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">👥 Clientes</h2>
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {clients.map((client: any) => {
+            const clientSales = allSales.filter(s => s.clientId === client.id);
+            const totalVendido = clientSales.reduce((sum, s) => sum + s.totalValue, 0);
+            
+            return (
+              <button
+                key={client.id}
+                onClick={() => loadClientSales(client.id)}
+                onDoubleClick={() => openClientModal(client.id)}
+                className={`w-full text-left p-4 rounded-lg border-2 transition ${
+                  selectedClient?.id === client.id
+                    ? 'border-purple-600 bg-purple-50'
+                    : 'border-gray-200 hover:border-purple-300'
+                }`}
+                title="Clique duplo para ver carnê"
+              >
+                <p className="font-semibold text-gray-800">{client.name}</p>
+                <p className="text-sm text-gray-600">{client.phone}</p>
+                <div className="mt-2 flex justify-between items-center">
+                  <span className="text-xs text-gray-500">{clientSales.length} venda(s)</span>
+                  <span className="text-sm font-bold text-green-600">{formatCurrency(totalVendido)}</span>
+                </div>
+              </button>
+            );
+          })}
+          {clients.length === 0 && (
+            <p className="text-gray-400 text-center py-8">Nenhum cliente cadastrado</p>
+          )}
+        </div>
+      </div>
+
+      {/* Histórico de Vendas do Cliente Selecionado */}
+      <div className="lg:col-span-2 bg-white rounded-xl shadow-lg p-6">
+        {selectedClient ? (
+          <>
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-gray-800">
+                📜 Histórico de {selectedClient.name}
+              </h2>
+              <p className="text-gray-600">{selectedClient.phone}</p>
+            </div>
+
+            <div className="space-y-4 max-h-[600px] overflow-y-auto">
+              {sales.map((sale: any) => {
+                const totalPago = getTotalPaid(sale.installmentsR || []);
+                const totalPendente = getTotalPending(sale.installmentsR || []);
+                const progresso = (totalPago / sale.totalValue) * 100;
+
+                return (
+                  <div key={sale.id} className="border-2 border-gray-200 rounded-lg p-4 hover:border-purple-300 transition">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-bold text-gray-800">{sale.itemName}</h3>
+                        <p className="text-sm text-gray-500">{formatDate(sale.saleDate)}</p>
+                      </div>
+                      <div className="text-right flex items-start gap-3">
+                        <div>
+                          <p className="text-xl font-bold text-green-600">{formatCurrency(sale.totalValue)}</p>
+                          <p className="text-xs text-gray-500">{sale.installments}x parcelas</p>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteClick(sale)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded transition"
+                          title="Excluir venda"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Barra de Progresso */}
+                    <div className="mb-3">
+                      <div className="flex justify-between text-xs text-gray-600 mb-1">
+                        <span>Progresso do Pagamento</span>
+                        <span>{progresso.toFixed(0)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all"
+                          style={{ width: `${progresso}%` }}
+                        ></div>
+                      </div>
+                      <div className="flex justify-between text-xs mt-1">
+                        <span className="text-green-600">Pago: {formatCurrency(totalPago)}</span>
+                        <span className="text-red-600">Pendente: {formatCurrency(totalPendente)}</span>
+                      </div>
+                    </div>
+
+                    {/* Lista de Parcelas */}
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-gray-700 mb-2">Parcelas:</p>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        {sale.installmentsR?.map((inst: any) => (
+                          <div
+                            key={inst.id}
+                            className={`text-xs p-2 rounded ${
+                              inst.paid
+                                ? 'bg-green-100 text-green-800'
+                                : new Date(inst.dueDate) < new Date()
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}
+                          >
+                            <div className="flex justify-between items-center">
+                              <span className="font-semibold">
+                                {inst.paid ? '✓' : inst.sequence}ª
+                              </span>
+                              <span>{formatCurrency(inst.amount)}</span>
+                            </div>
+                            <div className="text-[10px] mt-1">
+                              {inst.paid ? `Pago ${formatDate(inst.paidAt)}` : formatDate(inst.dueDate)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {sale.observations && (
+                      <div className="mt-3 p-2 bg-gray-50 rounded text-sm text-gray-600">
+                        <strong>Obs:</strong> {sale.observations}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {sales.length === 0 && (
+                <p className="text-gray-400 text-center py-12">Nenhuma venda registrada para este cliente</p>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center text-gray-400">
+              <p className="text-6xl mb-4">👈</p>
+              <p className="text-lg">Selecione um cliente para ver o histórico</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Modal de Confirmação de Exclusão */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">⚠️ Excluir Venda</h3>
+            <p className="text-gray-600 mb-4">
+              Tem certeza que deseja excluir a venda de <strong>{saleToDelete?.itemName}</strong> no valor de <strong>{formatCurrency(saleToDelete?.totalValue || 0)}</strong>?
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Motivo da exclusão: <span className="text-red-600">*</span>
+              </label>
+              <textarea
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-600 focus:outline-none resize-none"
+                rows={3}
+                placeholder="Digite o motivo da exclusão (obrigatório)..."
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setSaleToDelete(null);
+                  setDeleteReason('');
+                }}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                disabled={!deleteReason.trim()}
+              >
+                Confirmar Exclusão
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CobrancaPage({ token }: { token: string }) {
+  const [sales, setSales] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+
+  useEffect(() => {
+    const load = async () => {
+      const res = await fetch('/api/sales', { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      setSales(Array.isArray(data) ? data : []);
+      setLoading(false);
+    };
+    load();
+  }, [token]);
+
+  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  const formatDate = (dateStr?: string) => dateStr ? new Date(dateStr).toLocaleDateString('pt-BR') : '-';
+
+  const parseMonthRange = (ym: string) => {
+    const [y, m] = ym.split('-').map(Number);
+    const start = new Date(y, (m || 1) - 1, 1, 0, 0, 0, 0);
+    const end = new Date(y, (m || 1), 0, 23, 59, 59, 999);
+    return { start, end };
+  };
+
+  const nextInstallment = (sale: any) => {
+    const pending = (sale.installmentsR || []).filter((i: any) => !i.paid).sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    return pending[0];
+  };
+
+  const monthInstallment = (sale: any, start: Date, end: Date) => {
+    const inMonth = (sale.installmentsR || [])
+      .filter((i: any) => !i.paid && new Date(i.dueDate) >= start && new Date(i.dueDate) <= end)
+      .sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    return inMonth[0];
+  };
+
+  const { start, end } = parseMonthRange(selectedMonth);
+  const filteredSales = sales.filter((sale: any) => (sale.installmentsR || [])
+    .some((i: any) => !i.paid && new Date(i.dueDate) >= start && new Date(i.dueDate) <= end));
+
+  // Agrupar vendas por cliente
+  const groupedByClient = filteredSales.reduce((acc: any, sale: any) => {
+    const clientId = sale.client?.id || 0;
+    if (!acc[clientId]) {
+      acc[clientId] = {
+        client: sale.client,
+        sales: []
+      };
+    }
+    acc[clientId].sales.push(sale);
+    return acc;
+  }, {});
+
+  // Ordenar clientes alfabeticamente
+  const sortedGroups = Object.values(groupedByClient).sort((a: any, b: any) => {
+    const nameA = (a.client?.name || '').toUpperCase();
+    const nameB = (b.client?.name || '').toUpperCase();
+    return nameA.localeCompare(nameB, 'pt-BR');
+  });
+
+  const generateReportText = () => {
+    let text = '🧾 Relação de Cobrança\n';
+    text += `Período: ${selectedMonth}\n`;
+    sortedGroups.forEach((group: any) => {
+      const address = group.client?.billingAddress || group.client?.address || group.client?.city || 'Sem endereço';
+      text += `\n👤 ${group.client?.name || 'Cliente'}\n`;
+      text += `📍 Cobrança: ${address}\n`;
+      group.sales.forEach((sale: any) => {
+        const paid = (sale.installmentsR || []).filter((i: any) => i.paid).reduce((s: number, i: any) => s + i.amount, 0);
+        const pendingInst = monthInstallment(sale, start, end) || nextInstallment(sale);
+        text += `  💎 ${sale.itemName}\n`;
+        if (pendingInst) text += `  💵 Próx: ${formatCurrency(pendingInst.amount)} venc. ${formatDate(pendingInst.dueDate)}\n`;
+        text += `  ✅ Pago: ${formatCurrency(paid)} / Total: ${formatCurrency(sale.totalValue)}\n`;
+      });
+    });
+    return text;
+  };
+
+  const handleWhats = () => {
+    const url = `https://wa.me/?text=${encodeURIComponent(generateReportText())}`;
+    window.open(url, '_blank');
+  };
+
+  const handleEmail = () => {
+    const subject = encodeURIComponent('Relação de Cobrança');
+    const body = encodeURIComponent(generateReportText());
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
+
+  const handlePrint = () => {
+    const win = window.open('', '_blank');
+    if (!win) return;
+    const rows = Object.values(groupedByClient).map((group: any) => {
+      const address = group.client?.billingAddress || group.client?.address || group.client?.city || 'Sem endereço';
+      const clientRows = group.sales.map((sale: any, idx: number) => {
+        const paid = (sale.installmentsR || []).filter((i: any) => i.paid).reduce((s: number, i: any) => s + i.amount, 0);
+        const pending = sale.totalValue - paid;
+        const pct = Math.max(0, Math.min(100, (paid / sale.totalValue) * 100));
+        const next = monthInstallment(sale, start, end) || nextInstallment(sale);
+        return `<tr>
+          <td>${idx === 0 ? `<strong>${group.client?.name || ''}</strong><br><small>${address}</small>` : ''}</td>
+          <td>${sale.itemName}</td>
+          <td>${next ? formatCurrency(next.amount) + '<br><small>venc. ' + formatDate(next.dueDate) + '</small>' : '-'}</td>
+          <td>${formatCurrency(paid)}</td>
+          <td>${formatCurrency(sale.totalValue)}</td>
+          <td>${formatCurrency(pending)}<br><small>${pct.toFixed(0)}% pago</small></td>
+        </tr>`;
+      }).join('');
+      return clientRows;
+    }).join('');
+
+    win.document.write(`<!doctype html><html><head><title>Relação de Cobrança - Detalhada</title><style>
+      body { font-family: Arial, sans-serif; padding: 20px; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: top; }
+      th { background: #f5f5f5; }
+      small { color: #666; font-size: 0.85em; }
+    </style></head><body>
+    <h2>Relação de Cobrança - Detalhada</h2>
+    <p><strong>Período:</strong> ${selectedMonth}</p>
+    <table><thead><tr>
+      <th>Cliente / Endereço</th><th>Produto</th><th>Próxima parcela</th><th>Total pago</th><th>Total peça</th><th>Falta / %</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+    <script>window.onload = () => setTimeout(() => window.print(), 400);</script>
+    </body></html>`);
+    win.document.close();
+  };
+
+  const handlePrintSummary = () => {
+    const win = window.open('', '_blank');
+    if (!win) return;
+    const rows = sortedGroups.map((group: any) => {
+      const address = group.client?.billingAddress || group.client?.address || group.client?.city || 'Sem endereço';
+      // Somar todas as parcelas pendentes do período para este cliente
+      let totalToReceive = 0;
+      group.sales.forEach((sale: any) => {
+        const pendingInPeriod = (sale.installmentsR || [])
+          .filter((i: any) => !i.paid && new Date(i.dueDate) >= start && new Date(i.dueDate) <= end)
+          .reduce((sum: number, inst: any) => sum + inst.amount, 0);
+        totalToReceive += pendingInPeriod;
+      });
+      
+      return `<tr>
+        <td><strong>${group.client?.name || ''}</strong></td>
+        <td>${address}</td>
+        <td style="text-align: right;"><strong>${formatCurrency(totalToReceive)}</strong></td>
+        <td style="min-height: 60px; border: 1px solid #999;">&nbsp;</td>
+      </tr>`;
+    }).join('');
+
+    win.document.write(`<!doctype html><html><head><title>Relação de Cobrança - Resumida</title><style>
+      body { font-family: Arial, sans-serif; padding: 20px; }
+      h2 { margin-bottom: 5px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+      th, td { border: 1px solid #ccc; padding: 12px; text-align: left; vertical-align: top; }
+      th { background: #f5f5f5; font-weight: bold; }
+      td:last-child { min-width: 200px; }
+    </style></head><body>
+    <h2>Relação de Cobrança - Resumida</h2>
+    <p><strong>Período:</strong> ${selectedMonth}</p>
+    <table><thead><tr>
+      <th style="width: 25%;">Cliente</th>
+      <th style="width: 30%;">Endereço de Cobrança</th>
+      <th style="width: 15%; text-align: right;">Total a Receber</th>
+      <th style="width: 30%;">Observações</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+    <script>window.onload = () => setTimeout(() => window.print(), 400);</script>
+    </body></html>`);
+    win.document.close();
+  };
+
+  const totalSummary = filteredSales.reduce((acc, sale) => {
+    const paid = (sale.installmentsR || []).filter((i: any) => i.paid).reduce((s: number, i: any) => s + i.amount, 0);
+    acc.paid += paid;
+    acc.total += sale.totalValue || 0;
+    return acc;
+  }, { paid: 0, total: 0 });
+
+  return (
+    <div className="bg-white rounded-xl shadow p-6">
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="flex-1">
+          <h2 className="text-2xl font-bold text-gray-800">🧾 Relação de Cobrança</h2>
+          <p className="text-sm text-gray-600">Endereços de cobrança, valores de parcelas, pagos e faltantes (ordenado alfabeticamente).</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-700">Mês:</label>
+          <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="border rounded px-2 py-1" />
+        </div>
+        <div className="flex gap-2">
+          <button onClick={handlePrint} className="px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm" title="Versão detalhada com todos os produtos">🖨️ PDF Detalhado</button>
+          <button onClick={handlePrintSummary} className="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm" title="Versão resumida por cliente">📋 PDF Resumido</button>
+          <button onClick={handleEmail} className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700" title="Enviar por e-mail">✉️ E-mail</button>
+          <button onClick={handleWhats} className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700" title="WhatsApp">📱 WhatsApp</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <div className="p-3 bg-green-50 border border-green-200 rounded">
+          <p className="text-xs text-gray-600">Total pago</p>
+          <p className="text-xl font-bold text-green-700">{formatCurrency(totalSummary.paid)}</p>
+        </div>
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded">
+          <p className="text-xs text-gray-600">Total peças</p>
+          <p className="text-xl font-bold text-blue-700">{formatCurrency(totalSummary.total)}</p>
+        </div>
+        <div className="p-3 bg-orange-50 border border-orange-200 rounded">
+          <p className="text-xs text-gray-600">Falta receber</p>
+          <p className="text-xl font-bold text-orange-700">{formatCurrency(totalSummary.total - totalSummary.paid)}</p>
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="text-gray-500">Carregando...</p>
+      ) : filteredSales.length === 0 ? (
+        <p className="text-gray-500">Nenhum registro no período selecionado.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="text-left p-2">Cliente / Endereço</th>
+                <th className="text-left p-2">Produto</th>
+                <th className="text-left p-2">Próxima parcela</th>
+                <th className="text-right p-2">Total pago</th>
+                <th className="text-right p-2">Valor total</th>
+                <th className="text-right p-2">Falta / %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedGroups.map((group: any) => {
+                const address = group.client?.billingAddress || group.client?.address || group.client?.city || 'Sem endereço';
+                return (
+                  <Fragment key={group.client?.id || 0}>
+                    {group.sales.map((sale: any, idx: number) => {
+                      const paid = (sale.installmentsR || []).filter((i: any) => i.paid).reduce((s: number, i: any) => s + i.amount, 0);
+                      const pending = sale.totalValue - paid;
+                      const pct = Math.max(0, Math.min(100, (paid / sale.totalValue) * 100));
+                      const next = monthInstallment(sale, start, end) || nextInstallment(sale);
+                      return (
+                        <tr key={sale.id} className="border-b hover:bg-gray-50">
+                          <td className="p-2 align-top">
+                            {idx === 0 ? (
+                              <div>
+                                <div className="font-bold text-gray-800">{group.client?.name}</div>
+                                <div className="text-xs text-gray-600 mt-1">📍 {address}</div>
+                              </div>
+                            ) : null}
+                          </td>
+                          <td className="p-2 text-gray-700">{sale.itemName}</td>
+                          <td className="p-2 text-gray-700">
+                            {next ? (
+                              <div>
+                                <div className="font-semibold text-green-700">{formatCurrency(next.amount)}</div>
+                                <div className="text-xs text-gray-500">Venc: {formatDate(next.dueDate)}</div>
+                              </div>
+                            ) : <span className="text-gray-400">-</span>}
+                          </td>
+                          <td className="p-2 text-right text-green-700 font-semibold">{formatCurrency(paid)}</td>
+                          <td className="p-2 text-right text-gray-800 font-semibold">{formatCurrency(sale.totalValue)}</td>
+                          <td className="p-2 text-right text-orange-700 font-semibold">
+                            {formatCurrency(pending)}
+                            <div className="text-xs text-gray-500">{pct.toFixed(0)}% recebido</div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RelatorioPage({ token, clients }: { token: string, clients: any[] }) {
+  const [period, setPeriod] = useState('month');
+  const [selectedClients, setSelectedClients] = useState<number[]>([]);
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  const loadAnalytics = async () => {
+    setLoading(true);
+    try {
+      const clientIdsParam = JSON.stringify(selectedClients);
+      const res = await fetch(`/api/sales/analytics?period=${period}&clientIds=${encodeURIComponent(clientIdsParam)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setAnalytics(data);
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+    }
+    setLoading(false);
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
+
+  const toggleClient = (clientId: number) => {
+    setSelectedClients(prev =>
+      prev.includes(clientId)
+        ? prev.filter(id => id !== clientId)
+        : [...prev, clientId]
+    );
+  };
+
+  const selectAllClients = () => {
+    if (selectedClients.length === clients.length) {
+      setSelectedClients([]);
+    } else {
+      setSelectedClients(clients.map(c => c.id));
+    }
+  };
+
+  return (
+    <div className="w-full">
+      <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">📊 Fechamento de Vendas</h2>
+
+        {/* Filtros */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          {/* Seleção de Período */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-3">Período</label>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => setPeriod('week')}
+                className={`px-4 py-2 rounded ${period === 'week' ? 'bg-purple-600 text-white' : 'bg-gray-200'}`}
+              >
+                📅 Semana
+              </button>
+              <button
+                onClick={() => setPeriod('15days')}
+                className={`px-4 py-2 rounded ${period === '15days' ? 'bg-purple-600 text-white' : 'bg-gray-200'}`}
+              >
+                📆 15 Dias
+              </button>
+              <button
+                onClick={() => setPeriod('month')}
+                className={`px-4 py-2 rounded ${period === 'month' ? 'bg-purple-600 text-white' : 'bg-gray-200'}`}
+              >
+                📋 Mês
+              </button>
+              <button
+                onClick={() => setPeriod('year')}
+                className={`px-4 py-2 rounded ${period === 'year' ? 'bg-purple-600 text-white' : 'bg-gray-200'}`}
+              >
+                📊 Ano
+              </button>
+            </div>
+          </div>
+
+          {/* Seleção de Clientes */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-3">Clientes</label>
+            <button
+              onClick={selectAllClients}
+              className="px-3 py-2 bg-blue-500 text-white rounded text-sm mb-2 w-full"
+            >
+              {selectedClients.length === clients.length ? '❌ Desselecionar Todos' : '✅ Selecionar Todos'}
+            </button>
+            <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+              {clients.map(client => (
+                <label key={client.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedClients.includes(client.id)}
+                    onChange={() => toggleClient(client.id)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm text-gray-700">{client.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={loadAnalytics}
+          disabled={loading}
+          className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 disabled:opacity-50"
+        >
+          {loading ? '⏳ Carregando...' : '🔍 Gerar Relatório'}
+        </button>
+      </div>
+
+      {/* Resultados */}
+      {analytics && (
+        <div className="space-y-6">
+          {/* Resumo Geral */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <p className="text-gray-500 text-sm mb-2">Total de Vendas</p>
+              <p className="text-3xl font-bold text-purple-600">{analytics.totalSales}</p>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <p className="text-gray-500 text-sm mb-2">Receita Total</p>
+              <p className="text-2xl font-bold text-green-600">{formatCurrency(analytics.totalRevenue)}</p>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <p className="text-gray-500 text-sm mb-2">Ticket Médio</p>
+              <p className="text-2xl font-bold text-blue-600">
+                {formatCurrency(analytics.totalSales > 0 ? analytics.totalRevenue / analytics.totalSales : 0)}
+              </p>
+            </div>
+          </div>
+
+          {/* Vendas por Período */}
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">💰 Vendas por Período</h3>
+            <div className="space-y-4">
+              {Object.entries(analytics.byPeriod).map(([periodName, data]: [string, any]) => (
+                <div key={periodName} className="border-l-4 border-purple-600 pl-4 py-3 bg-gray-50 rounded">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold text-gray-800">{periodName}</p>
+                      <p className="text-sm text-gray-600">{data.count} {data.count === 1 ? 'venda' : 'vendas'}</p>
+                    </div>
+                    <p className="text-2xl font-bold text-green-600">{formatCurrency(data.total)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Vendas por Cliente */}
+          {Object.keys(analytics.byClient).length > 0 && (
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h3 className="text-xl font-bold text-gray-800 mb-4">👥 Vendas por Cliente</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-100 border-b-2 border-gray-300">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-gray-700 font-semibold">Cliente</th>
+                      <th className="px-4 py-2 text-center text-gray-700 font-semibold">Vendas</th>
+                      <th className="px-4 py-2 text-right text-gray-700 font-semibold">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(analytics.byClient).map(([clientName, data]: [string, any]) => (
+                      <tr key={clientName} className="border-b hover:bg-gray-50">
+                        <td className="px-4 py-3 text-gray-800">{clientName}</td>
+                        <td className="px-4 py-3 text-center text-gray-600">{data.sales.length}</td>
+                        <td className="px-4 py-3 text-right font-bold text-green-600">{formatCurrency(data.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Detalhe das Vendas */}
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">🛍️ Detalhe das Vendas</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-100 border-b-2 border-gray-300">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-gray-700 font-semibold">Data</th>
+                    <th className="px-4 py-2 text-left text-gray-700 font-semibold">Cliente</th>
+                    <th className="px-4 py-2 text-left text-gray-700 font-semibold">Produto</th>
+                    <th className="px-4 py-2 text-center text-gray-700 font-semibold">Parcelas</th>
+                    <th className="px-4 py-2 text-right text-gray-700 font-semibold">Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {analytics.allSales.map((sale: any) => (
+                    <tr key={sale.id} className="border-b hover:bg-gray-50">
+                      <td className="px-4 py-3 text-gray-600 text-sm">
+                        {new Date(sale.saleDate).toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="px-4 py-3 text-gray-800 font-medium">{sale.client.name}</td>
+                      <td className="px-4 py-3 text-gray-700">{sale.itemName}</td>
+                      <td className="px-4 py-3 text-center text-gray-600">{sale.installments}x</td>
+                      <td className="px-4 py-3 text-right font-bold text-green-600">{formatCurrency(sale.totalValue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!analytics && (
+        <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+          <p className="text-gray-400 text-lg">👈 Selecione os filtros e clique em "Gerar Relatório"</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ConfigPage({ token }: { token: string }) {
+  const [settings, setSettings] = useState<any>({});
+  const [loading, setLoading] = useState(false);
+  const [testPhone, setTestPhone] = useState('');
+  const [testStatus, setTestStatus] = useState('');
+  
+  // Estados para senhas
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changePasswordStatus, setChangePasswordStatus] = useState('');
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
+  
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminPasswordConfirm, setAdminPasswordConfirm] = useState('');
+  const [adminPasswordStatus, setAdminPasswordStatus] = useState('');
+  const [adminPasswordLoading, setAdminPasswordLoading] = useState(false);
+
+  // Estados para criar novo usuário
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserStatus, setNewUserStatus] = useState('');
+  const [newUserLoading, setNewUserLoading] = useState(false);
+
+  // Estados para gerenciar usuários
+  const [users, setUsers] = useState<any[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [editUserEmail, setEditUserEmail] = useState('');
+  const [editUserPassword, setEditUserPassword] = useState('');
+
+  // Estados para teste de email
+  const [testEmail, setTestEmail] = useState('');
+  const [testEmailStatus, setTestEmailStatus] = useState('');
+
+  useEffect(() => {
+    loadSettings();
+    loadUsers();
+  }, []);
+
+  const loadSettings = async () => {
+    const res = await fetch('/api/settings', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await res.json();
+    setSettings(data);
+  };
+
+  const loadUsers = async () => {
+    setUsersLoading(true);
+    try {
+      const res = await fetch('/api/users', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setUsers(data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar usuários:', error);
+    }
+    setUsersLoading(false);
+  };
+
+  const handleDeleteUser = async (userId: number) => {
+    if (!confirm('Tem certeza que deseja excluir este usuário?')) return;
+    
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        loadUsers();
+        alert('✅ Usuário excluído com sucesso!');
+      } else {
+        const error = await res.json();
+        alert('❌ ' + (error.error || 'Erro ao excluir'));
+      }
+    } catch (error) {
+      alert('❌ Erro: ' + error);
+    }
+  };
+
+  const handleEditUser = (user: any) => {
+    setEditingUser(user);
+    setEditUserEmail(user.email);
+    setEditUserPassword('');
+  };
+
+  const handleSaveUser = async () => {
+    if (!editingUser) return;
+    
+    try {
+      const res = await fetch(`/api/users/${editingUser.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          email: editUserEmail,
+          password: editUserPassword || undefined
+        })
+      });
+      
+      if (res.ok) {
+        setEditingUser(null);
+        loadUsers();
+        alert('✅ Usuário atualizado com sucesso!');
+      } else {
+        const error = await res.json();
+        alert('❌ ' + (error.error || 'Erro ao atualizar'));
+      }
+    } catch (error) {
+      alert('❌ Erro: ' + error);
+    }
+  };
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify(settings)
+      });
+      alert('✅ Configurações salvas com sucesso!');
+    } catch (error) {
+      alert('❌ Erro ao salvar: ' + error);
+    }
+    setLoading(false);
+  };
+
+  const handleTest = async () => {
+    if (!testPhone) {
+      alert('Digite um número de telefone');
+      return;
+    }
+
+    setTestStatus('Enviando...');
+    try {
+      const res = await fetch('/api/settings/test-whatsapp', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify({ phone: testPhone })
+      });
+
+      if (res.ok) {
+        setTestStatus('✅ Mensagem enviada com sucesso!');
+      } else {
+        const error = await res.json();
+        setTestStatus('❌ Erro: ' + error.error);
+      }
+    } catch (error) {
+      setTestStatus('❌ Erro: ' + error);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    setChangePasswordStatus('');
+    
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setChangePasswordStatus('❌ Preencha todos os campos');
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      setChangePasswordStatus('❌ As senhas não conferem');
+      return;
+    }
+    
+    if (newPassword.length < 6) {
+      setChangePasswordStatus('❌ Senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+
+    setChangePasswordLoading(true);
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword
+        })
+      });
+
+      if (res.ok) {
+        setChangePasswordStatus('✅ Senha alterada com sucesso!');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      } else {
+        const error = await res.json();
+        setChangePasswordStatus('❌ ' + (error.error || 'Erro ao alterar senha'));
+      }
+    } catch (error) {
+      setChangePasswordStatus('❌ Erro: ' + error);
+    }
+    setChangePasswordLoading(false);
+  };
+
+  const handleSetAdminPassword = async () => {
+    setAdminPasswordStatus('');
+    
+    if (!adminPassword || !adminPasswordConfirm) {
+      setAdminPasswordStatus('❌ Preencha todos os campos');
+      return;
+    }
+    
+    if (adminPassword !== adminPasswordConfirm) {
+      setAdminPasswordStatus('❌ As senhas não conferem');
+      return;
+    }
+    
+    if (adminPassword.length < 6) {
+      setAdminPasswordStatus('❌ Senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+
+    setAdminPasswordLoading(true);
+    try {
+      const res = await fetch('/api/auth/admin-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          adminPassword
+        })
+      });
+
+      if (res.ok) {
+        setAdminPasswordStatus('✅ Senha de admin configurada com sucesso!');
+        setAdminPassword('');
+        setAdminPasswordConfirm('');
+      } else {
+        const error = await res.json();
+        setAdminPasswordStatus('❌ ' + (error.error || 'Erro ao configurar senha de admin'));
+      }
+    } catch (error) {
+      setAdminPasswordStatus('❌ Erro: ' + error);
+    }
+    setAdminPasswordLoading(false);
+  };
+
+  const handleCreateUser = async () => {
+    setNewUserStatus('');
+    
+    if (!newUserEmail || !newUserPassword) {
+      setNewUserStatus('❌ Preencha email e senha');
+      return;
+    }
+    
+    if (newUserPassword.length < 6) {
+      setNewUserStatus('❌ Senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+
+    setNewUserLoading(true);
+    try {
+      const res = await fetch('/api/auth/create-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          email: newUserEmail,
+          password: newUserPassword
+        })
+      });
+
+      if (res.ok) {
+        setNewUserStatus('✅ Usuário criado com sucesso!');
+        setNewUserEmail('');
+        setNewUserPassword('');
+      } else {
+        const error = await res.json();
+        setNewUserStatus('❌ ' + (error.error || 'Erro ao criar usuário'));
+      }
+    } catch (error) {
+      setNewUserStatus('❌ Erro: ' + error);
+    }
+    setNewUserLoading(false);
+  };
+
+  const handleTestEmail = async () => {
+    if (!testEmail) {
+      setTestEmailStatus('❌ Digite um email de destino');
+      return;
+    }
+
+    setTestEmailStatus('📧 Enviando...');
+    try {
+      const res = await fetch('/api/settings/test-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ email: testEmail })
+      });
+
+      if (res.ok) {
+        setTestEmailStatus('✅ Email enviado com sucesso!');
+      } else {
+        const error = await res.json();
+        setTestEmailStatus('❌ ' + (error.error || 'Erro ao enviar email'));
+      }
+    } catch (error) {
+      setTestEmailStatus('❌ Erro: ' + error);
+    }
+  };
+
+  const updateSetting = (key: string, value: any) => {
+    setSettings({ ...settings, [key]: value });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">⚙️ Configurações</h2>
+
+        {/* WhatsApp */}
+        <div className="mb-8">
+          <h3 className="text-xl font-bold text-gray-700 mb-4 border-b pb-2">📱 WhatsApp</h3>
+          
+          <div className="mb-4">
+            <label className="block font-semibold mb-2">Provider</label>
+            <select 
+              className="w-full p-3 border rounded-lg"
+              value={settings.whatsappProvider || 'mock'}
+              onChange={(e) => updateSetting('whatsappProvider', e.target.value)}
+              title="Provedor de WhatsApp"
+            >
+              <option value="mock">Mock (Teste - não envia)</option>
+              <option value="twilio">Twilio</option>
+              <option value="meta">Meta (WhatsApp Business API)</option>
+            </select>
+          </div>
+
+          {settings.whatsappProvider === 'twilio' && (
+            <>
+              <div className="mb-4">
+                <label className="block font-semibold mb-2">Twilio Account SID</label>
+                <input 
+                  type="text" 
+                  className="w-full p-3 border rounded-lg"
+                  value={settings.twilioAccountSid || ''}
+                  onChange={(e) => updateSetting('twilioAccountSid', e.target.value)}
+                  placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block font-semibold mb-2">Twilio Auth Token</label>
+                <input 
+                  type="password" 
+                  className="w-full p-3 border rounded-lg"
+                  value={settings.twilioAuthToken || ''}
+                  onChange={(e) => updateSetting('twilioAuthToken', e.target.value)}
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block font-semibold mb-2">Número Twilio (From)</label>
+                <input 
+                  type="text" 
+                  className="w-full p-3 border rounded-lg"
+                  value={settings.twilioFrom || ''}
+                  onChange={(e) => updateSetting('twilioFrom', e.target.value)}
+                  placeholder="+14155238886"
+                />
+              </div>
+            </>
+          )}
+
+          {settings.whatsappProvider === 'meta' && (
+            <>
+              <div className="mb-4">
+                <label className="block font-semibold mb-2">Meta Access Token</label>
+                <input 
+                  type="password" 
+                  className="w-full p-3 border rounded-lg"
+                  value={settings.metaToken || ''}
+                  onChange={(e) => updateSetting('metaToken', e.target.value)}
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block font-semibold mb-2">Phone Number ID</label>
+                <input 
+                  type="text" 
+                  className="w-full p-3 border rounded-lg"
+                  value={settings.metaPhoneNumberId || ''}
+                  onChange={(e) => updateSetting('metaPhoneNumberId', e.target.value)}
+                  placeholder="123456789012345"
+                />
+              </div>
+            </>
+          )}
+
+          <div className="mb-4">
+            <label className="block font-semibold mb-2">Número do Administrador (para receber cópias)</label>
+            <input 
+              type="text" 
+              className="w-full p-3 border rounded-lg"
+              value={settings.adminPhone || ''}
+              onChange={(e) => updateSetting('adminPhone', e.target.value)}
+              placeholder="+5511999999999"
+            />
+            <p className="text-sm text-gray-600 mt-1">Formato internacional com +55</p>
+          </div>
+
+          {/* Teste */}
+          <div className="bg-gray-50 p-4 rounded-lg border">
+            <h4 className="font-semibold mb-3">🧪 Testar Envio</h4>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                className="flex-1 p-3 border rounded-lg"
+                value={testPhone}
+                onChange={(e) => setTestPhone(e.target.value)}
+                placeholder="+5511999999999"
+              />
+              <button 
+                onClick={handleTest}
+                className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              >
+                Enviar Teste
+              </button>
+            </div>
+            {testStatus && <p className="mt-2 text-sm">{testStatus}</p>}
+          </div>
+        </div>
+
+        {/* Senhas */}
+        <div className="mb-8">
+          <h3 className="text-xl font-bold text-gray-700 mb-4 border-b pb-2">🔐 Senhas</h3>
+          
+          {/* Alterar Senha */}
+          <div className="mb-8 bg-blue-50 p-6 rounded-lg">
+            <h4 className="font-bold text-gray-700 mb-4">🔑 Alterar Minha Senha</h4>
+            
+            <div className="mb-4">
+              <label className="block font-semibold mb-2 text-gray-700">Senha Atual</label>
+              <input 
+                type="password" 
+                className="w-full p-3 border rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Digite sua senha atual"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="block font-semibold mb-2 text-gray-700">Nova Senha</label>
+              <input 
+                type="password" 
+                className="w-full p-3 border rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Digite a nova senha (mín. 6 caracteres)"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="block font-semibold mb-2 text-gray-700">Confirmar Nova Senha</label>
+              <input 
+                type="password" 
+                className="w-full p-3 border rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirme a nova senha"
+              />
+            </div>
+
+            {changePasswordStatus && (
+              <p className={`mb-4 p-3 rounded ${changePasswordStatus.includes('✅') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {changePasswordStatus}
+              </p>
+            )}
+
+            <button 
+              onClick={handleChangePassword}
+              disabled={changePasswordLoading}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition"
+            >
+              {changePasswordLoading ? '⏳ Alterando...' : '✓ Alterar Senha'}
+            </button>
+          </div>
+
+          {/* Senha de Admin */}
+          <div className="bg-red-50 p-6 rounded-lg">
+            <h4 className="font-bold text-gray-700 mb-4">🛡️ Senha de Admin (para Reset de Conta)</h4>
+            <p className="text-sm text-gray-600 mb-4">Use esta senha para resetar contas bloqueadas ou fazer alterações administrativas.</p>
+            
+            <div className="mb-4">
+              <label className="block font-semibold mb-2 text-gray-700">Senha de Admin</label>
+              <input 
+                type="password" 
+                className="w-full p-3 border rounded-lg focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="Digite a senha de admin (mín. 6 caracteres)"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="block font-semibold mb-2 text-gray-700">Confirmar Senha de Admin</label>
+              <input 
+                type="password" 
+                className="w-full p-3 border rounded-lg focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
+                value={adminPasswordConfirm}
+                onChange={(e) => setAdminPasswordConfirm(e.target.value)}
+                placeholder="Confirme a senha de admin"
+              />
+            </div>
+
+            {adminPasswordStatus && (
+              <p className={`mb-4 p-3 rounded ${adminPasswordStatus.includes('✅') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {adminPasswordStatus}
+              </p>
+            )}
+
+            <button 
+              onClick={handleSetAdminPassword}
+              disabled={adminPasswordLoading}
+              className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition"
+            >
+              {adminPasswordLoading ? '⏳ Configurando...' : '✓ Configurar Senha de Admin'}
+            </button>
+          </div>
+
+          {/* Criar Novo Usuário */}
+          <div className="bg-green-50 p-6 rounded-lg mt-6">
+            <h4 className="font-bold text-gray-700 mb-4">👤 Criar Novo Usuário</h4>
+            <p className="text-sm text-gray-600 mb-4">Adicione novos usuários que poderão acessar o sistema.</p>
+            
+            <div className="mb-4">
+              <label className="block font-semibold mb-2 text-gray-700">Email do Novo Usuário</label>
+              <input 
+                type="email" 
+                className="w-full p-3 border rounded-lg focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
+                value={newUserEmail}
+                onChange={(e) => setNewUserEmail(e.target.value)}
+                placeholder="email@exemplo.com"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="block font-semibold mb-2 text-gray-700">Senha</label>
+              <input 
+                type="password" 
+                className="w-full p-3 border rounded-lg focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
+                value={newUserPassword}
+                onChange={(e) => setNewUserPassword(e.target.value)}
+                placeholder="Senha (mín. 6 caracteres)"
+              />
+            </div>
+
+            {newUserStatus && (
+              <p className={`mb-4 p-3 rounded ${newUserStatus.includes('✅') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {newUserStatus}
+              </p>
+            )}
+
+            <button 
+              onClick={handleCreateUser}
+              disabled={newUserLoading}
+              className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition"
+            >
+              {newUserLoading ? '⏳ Criando...' : '➕ Criar Usuário'}
+            </button>
+          </div>
+
+          {/* Lista de Usuários */}
+          <div className="bg-gray-50 p-6 rounded-lg mt-6">
+            <h4 className="font-bold text-gray-700 mb-4">📋 Usuários Cadastrados</h4>
+            
+            {usersLoading ? (
+              <p className="text-gray-500">Carregando...</p>
+            ) : users.length === 0 ? (
+              <p className="text-gray-500">Nenhum usuário cadastrado.</p>
+            ) : (
+              <div className="space-y-3">
+                {users.map((user) => (
+                  <div key={user.id} className="bg-white p-4 rounded-lg border flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold text-gray-800">{user.email}</p>
+                      <p className="text-xs text-gray-500">ID: {user.id}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEditUser(user)}
+                        className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded"
+                      >
+                        ✏️ Editar
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUser(user.id)}
+                        className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-sm rounded"
+                      >
+                        🗑️ Excluir
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Modal de Edição */}
+            {editingUser && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setEditingUser(null)}>
+                <div className="bg-white rounded-xl shadow-2xl max-w-md w-full" onClick={e => e.stopPropagation()}>
+                  <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white p-6 rounded-t-xl">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h2 className="text-xl font-bold">✏️ Editar Usuário</h2>
+                        <p className="text-sm mt-1 opacity-90">ID: {editingUser.id}</p>
+                      </div>
+                      <button onClick={() => setEditingUser(null)} className="text-2xl hover:opacity-70">×</button>
+                    </div>
+                  </div>
+
+                  <div className="p-6">
+                    <div className="mb-4">
+                      <label className="block font-semibold mb-2 text-gray-700">Email</label>
+                      <input 
+                        type="email" 
+                        className="w-full p-3 border rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                        value={editUserEmail}
+                        onChange={(e) => setEditUserEmail(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="mb-6">
+                      <label className="block font-semibold mb-2 text-gray-700">Nova Senha (deixe vazio para manter)</label>
+                      <input 
+                        type="password" 
+                        className="w-full p-3 border rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                        value={editUserPassword}
+                        onChange={(e) => setEditUserPassword(e.target.value)}
+                        placeholder="Nova senha (opcional)"
+                      />
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setEditingUser(null)}
+                        className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 p-3 rounded-lg font-semibold transition"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={handleSaveUser}
+                        className="flex-1 bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-lg font-semibold transition"
+                      >
+                        💾 Salvar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Configurações de Email */}
+        <div className="mb-8">
+          <h3 className="text-xl font-bold text-gray-700 mb-4 border-b pb-2">📧 Configurações de Email (SMTP)</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block font-semibold mb-2">Servidor SMTP</label>
+              <input 
+                type="text" 
+                className="w-full p-3 border rounded-lg"
+                value={settings.smtpHost || ''}
+                onChange={(e) => updateSetting('smtpHost', e.target.value)}
+                placeholder="smtp.umbler.com"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold mb-2">Porta</label>
+              <input 
+                type="number" 
+                className="w-full p-3 border rounded-lg"
+                value={settings.smtpPort || '587'}
+                onChange={(e) => updateSetting('smtpPort', e.target.value)}
+                placeholder="587"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block font-semibold mb-2">Email (usuário)</label>
+              <input 
+                type="email" 
+                className="w-full p-3 border rounded-lg"
+                value={settings.smtpUser || ''}
+                onChange={(e) => updateSetting('smtpUser', e.target.value)}
+                placeholder="email@seudominio.com"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold mb-2">Senha do Email</label>
+              <input 
+                type="password" 
+                className="w-full p-3 border rounded-lg"
+                value={settings.smtpPassword || ''}
+                onChange={(e) => updateSetting('smtpPassword', e.target.value)}
+                placeholder="Senha do email"
+              />
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <label className="block font-semibold mb-2">Nome do Remetente</label>
+            <input 
+              type="text" 
+              className="w-full p-3 border rounded-lg"
+              value={settings.smtpFromName || ''}
+              onChange={(e) => updateSetting('smtpFromName', e.target.value)}
+              placeholder="Vani e Elo Joias"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={settings.smtpSecure === 'true'}
+                onChange={(e) => updateSetting('smtpSecure', e.target.checked ? 'true' : 'false')}
+                className="w-5 h-5"
+              />
+              <span className="font-semibold">Usar TLS/SSL</span>
+            </label>
+            <p className="text-sm text-gray-600 mt-1">Marque se o servidor usar criptografia (recomendado para porta 587 com STARTTLS)</p>
+          </div>
+
+          {/* Teste de Email */}
+          <div className="bg-gray-50 p-4 rounded-lg border">
+            <h4 className="font-semibold mb-3">🧪 Testar Envio de Email</h4>
+            <div className="flex gap-2">
+              <input 
+                type="email" 
+                className="flex-1 p-3 border rounded-lg"
+                value={testEmail}
+                onChange={(e) => setTestEmail(e.target.value)}
+                placeholder="email@destino.com"
+              />
+              <button 
+                onClick={handleTestEmail}
+                className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              >
+                Enviar Teste
+              </button>
+            </div>
+            {testEmailStatus && <p className="mt-2 text-sm">{testEmailStatus}</p>}
+          </div>
+        </div>
+
+        {/* Lembretes */}
+        <div className="mb-8">
+          <h3 className="text-xl font-bold text-gray-700 mb-4 border-b pb-2">⏰ Lembretes Automáticos</h3>
+          
+          <div className="mb-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={settings.remindersEnabled === 'true'}
+                onChange={(e) => updateSetting('remindersEnabled', e.target.checked ? 'true' : 'false')}
+                className="w-5 h-5"
+              />
+              <span className="font-semibold">Habilitar lembretes automáticos</span>
+            </label>
+          </div>
+
+          <div className="mb-4">
+            <label className="block font-semibold mb-2">Dias antes do vencimento</label>
+            <input 
+              type="number" 
+              className="w-full p-3 border rounded-lg"
+              min="1"
+              max="30"
+              value={settings.reminderDaysBefore || '3'}
+              onChange={(e) => updateSetting('reminderDaysBefore', e.target.value)}
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block font-semibold mb-2">Template da Mensagem</label>
+            <textarea 
+              className="w-full p-3 border rounded-lg font-mono text-sm"
+              rows={5}
+              value={settings.reminderTemplate || 'Olá {{cliente}}! Lembrete da parcela {{parcela}}/{{total}} da joia "{{item}}". Valor: R$ {{valor}}. Vencimento: {{vencimento}}.'}
+              onChange={(e) => updateSetting('reminderTemplate', e.target.value)}
+            />
+            <p className="text-sm text-gray-600 mt-1">
+              Variáveis disponíveis: {'{{cliente}}, {{parcela}}, {{total}}, {{item}}, {{valor}}, {{vencimento}}'}
+            </p>
+          </div>
+
+          <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+            <p className="text-sm text-yellow-800">
+              ⚠️ Os lembretes são enviados diariamente às 08:00 (horário do servidor)
+            </p>
+          </div>
+        </div>
+
+        <button 
+          onClick={handleSave}
+          disabled={loading}
+          className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 disabled:opacity-50"
+        >
+          {loading ? '💾 Salvando...' : '💾 Salvar Configurações'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
+

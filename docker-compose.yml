@@ -1,0 +1,46 @@
+version: '3.9'
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: joias
+      POSTGRES_PASSWORD: joiaspass
+      POSTGRES_DB: joias
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  api:
+    build: ./apps/api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://joias:joiaspass@db:5432/joias
+      JWT_SECRET: supersecret
+      WHATSAPP_PROVIDER: mock
+      TWILIO_ACCOUNT_SID: ""
+      TWILIO_AUTH_TOKEN: ""
+      TWILIO_WHATSAPP_FROM: ""
+      META_WHATSAPP_TOKEN: ""
+      META_PHONE_NUMBER_ID: ""
+    depends_on:
+      - db
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./apps/api/uploads:/usr/src/app/uploads
+
+  web:
+    image: joias-web:latest
+    build: ./apps/web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/lib/letsencrypt:/var/lib/letsencrypt
+
+volumes:
+  db_data:
