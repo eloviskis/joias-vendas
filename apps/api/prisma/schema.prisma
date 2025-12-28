@@ -93,3 +93,16 @@ model SaleDeletion {
   reason       String
   deletedAt    DateTime @default(now())
 }
+
+model Showcase {
+  id          Int      @id @default(autoincrement())
+  itemName    String
+  itemCode    String?
+  factor      Float
+  baseValue   Float
+  price       Float
+  description String?
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

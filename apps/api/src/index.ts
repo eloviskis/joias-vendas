@@ -1,23 +1,36 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import cron from 'node-cron';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import nodemailer from 'nodemailer';
 import { createProvider, WhatsAppProvider } from './whatsapp-providers.js';
 import { generateCardText, CardData } from './card-generator.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = Fastify({ logger: true });
 app.register(cors, { origin: true });
 app.register(multipart);
 
+// Servir arquivos estáticos (uploads)
+app.register(fastifyStatic, {
+  root: path.join(__dirname, '..', 'uploads'),
+  prefix: '/uploads/',
+  decorateReply: false
+});
+
 // Allow overriding the database URL to support desktop (SQLite) or server (Postgres)
 const prisma = process.env.DATABASE_URL
   ? new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } })
+  : new PrismaClient();
   : new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev';
 
@@ -1043,6 +1056,77 @@ app.get('/message-logs', async () => {
     orderBy: { createdAt: 'desc' },
     take: 50
   });
+});
+
+// Mostruário (Showcase)
+app.get('/showcase', async () => {
+  return prisma.showcase.findMany({
+    orderBy: { createdAt: 'desc' }
+  });
+});
+
+app.post('/showcase', async (req: any, reply) => {
+  const { itemName, itemCode, factor, baseValue, price, description, imageBase64 } = req.body || {};
+  
+  if (!itemName || !factor || !baseValue || !price) {
+    return reply.code(400).send({ error: 'Missing required fields' });
+  }
+
+  // Salvar imagem se fornecida
+  let imageUrl = null;
+  if (imageBase64) {
+    try {
+      const uploadsDir = path.join(process.cwd(), 'uploads');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+      const filename = `showcase-${Date.now()}.jpg`;
+      const filepath = path.join(uploadsDir, filename);
+      
+      fs.writeFileSync(filepath, buffer);
+      imageUrl = `/uploads/${filename}`;
+    } catch (error) {
+      console.error('Error saving image:', error);
+    }
+  }
+
+  const item = await prisma.showcase.create({
+    data: {
+      itemName,
+      itemCode: itemCode || null,
+      factor,
+      baseValue,
+      price,
+      description: description || null,
+      imageUrl
+    }
+  });
+
+  return item;
+});
+
+app.delete('/showcase/:id', async (req: any, reply) => {
+  const id = parseInt(req.params.id);
+  
+  // Buscar item para deletar a imagem
+  const item = await prisma.showcase.findUnique({ where: { id } });
+  
+  if (item?.imageUrl) {
+    try {
+      const filepath = path.join(process.cwd(), item.imageUrl.replace(/^\//, ''));
+      if (fs.existsSync(filepath)) {
+        fs.unlinkSync(filepath);
+      }
+    } catch (error) {
+      console.error('Error deleting image:', error);
+    }
+  }
+  
+  await prisma.showcase.delete({ where: { id } });
+  return { success: true };
 });
 
 app.get('/health', async () => ({ ok: true }));

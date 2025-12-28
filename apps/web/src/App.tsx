@@ -7,13 +7,31 @@ function PaymentModal({ installment, onConfirm, onClose }: Readonly<{
   onClose: () => void;
 }>) {
   const [paidAt, setPaidAt] = useState(new Date().toISOString().split('T')[0]);
+  const handleOverlayKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClose();
+    }
+  };
   
   const formatCurrency = (value: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full" onClick={e => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+      role="button"
+      tabIndex={0}
+      aria-label="Fechar modal de pagamento"
+      onKeyDown={handleOverlayKey}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl max-w-md w-full"
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
         <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white p-6 rounded-t-xl">
           <div className="flex justify-between items-start">
             <div>
@@ -94,7 +112,7 @@ function ShareCarneModal({ sale, client, onClose }: Readonly<{ sale: any, client
         byYear[year].push(inst);
       });
 
-      Object.keys(byYear).sort().forEach(year => {
+      Object.keys(byYear).sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach(year => {
         text += `📅 *ANO ${year}*\n`;
         byYear[Number(year)].forEach((inst: any) => {
           const month = months[new Date(inst.dueDate).getMonth()];
@@ -113,7 +131,7 @@ function ShareCarneModal({ sale, client, onClose }: Readonly<{ sale: any, client
   // Enviar via WhatsApp
   const sendWhatsApp = () => {
     const text = encodeURIComponent(generateCarneText());
-    const phone = client.phone.replace(/\D/g, '');
+    const phone = client.phone.replaceAll(/\D/g, '');
     const url = `https://wa.me/55${phone}?text=${text}`;
     window.open(url, '_blank');
   };
@@ -138,7 +156,7 @@ function ShareCarneModal({ sale, client, onClose }: Readonly<{ sale: any, client
         });
       }
 
-      const yearsHtml = Object.keys(byYear).sort().map(year => `
+      const yearsHtml = Object.keys(byYear).sort((a, b) => a.localeCompare(b, 'pt-BR')).map(year => `
         <div class="year-section">
           <div class="year-title">ANO: ${year}</div>
           <table>
@@ -220,8 +238,25 @@ function ShareCarneModal({ sale, client, onClose }: Readonly<{ sale: any, client
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full" onClick={e => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+      role="button"
+      tabIndex={0}
+      aria-label="Fechar modal de compartilhamento"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl max-w-md w-full"
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
         <div className="bg-gradient-to-r from-green-500 to-teal-500 text-white p-6 rounded-t-xl">
           <div className="flex justify-between items-start">
             <div>
@@ -316,8 +351,25 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+      role="button"
+      tabIndex={0}
+      aria-label="Fechar carnê"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-6 rounded-t-xl">
           <div className="flex justify-between items-start">
@@ -443,7 +495,7 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
         <div className="p-6 space-y-6">
           {sales.map((sale: any) => {
             const installmentsByYear = groupInstallmentsByYear(sale.installmentsR || []);
-            const years = Object.keys(installmentsByYear).map(Number).sort();
+            const years = Object.keys(installmentsByYear).map(Number).sort((a, b) => a - b);
             
             return (
               <div key={sale.id} className="border-2 border-gray-200 rounded-xl overflow-hidden">
@@ -483,34 +535,40 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
                             </tr>
                           </thead>
                           <tbody>
-                            {months.map((monthName, monthIndex) => {
+                            {months.map((monthName) => {
+                              const monthIndex = months.indexOf(monthName);
                               const inst = installmentsByYear[year]?.find((i: any) => 
                                 new Date(i.dueDate).getMonth() === monthIndex
                               );
-                              
+                              const rowClass = inst ? (inst.paid ? 'bg-green-50' : 'bg-white') : 'bg-gray-50';
+                              const monthLabel = monthName.substring(0, 3);
+                              const statusCell = (() => {
+                                if (!inst) return '';
+                                if (inst.paid) {
+                                  const paidTitle = inst.paidAt ? `Pago em ${new Date(inst.paidAt).toLocaleDateString('pt-BR')}` : 'Pago';
+                                  return <span className="text-green-600 font-bold" title={paidTitle}>✓</span>;
+                                }
+                                if (onMarkPaid) {
+                                  return (
+                                    <button 
+                                      onClick={() => onMarkPaid(inst)}
+                                      className="text-gray-400 hover:text-green-500 transition"
+                                      title="Marcar como pago"
+                                    >
+                                      ○
+                                    </button>
+                                  );
+                                }
+                                return <span className="text-gray-300">○</span>;
+                              })();
+
                               return (
-                                <tr key={monthIndex} className={inst ? (inst.paid ? 'bg-green-50' : 'bg-white') : 'bg-gray-50'}>
-                                  <td className="p-2 border-b">{monthName.substring(0, 3)}</td>
+                                <tr key={monthName} className={rowClass}>
+                                  <td className="p-2 border-b">{monthLabel}</td>
                                   <td className="p-2 border-b text-right font-mono">
                                     {inst ? formatCurrency(inst.amount).replace('R$', '').trim() : '—'}
                                   </td>
-                                  <td className="p-2 border-b text-center">
-                                    {inst ? (
-                                      inst.paid ? (
-                                        <span className="text-green-600 font-bold" title={inst.paidAt ? `Pago em ${new Date(inst.paidAt).toLocaleDateString('pt-BR')}` : 'Pago'}>✓</span>
-                                      ) : onMarkPaid ? (
-                                        <button 
-                                          onClick={() => onMarkPaid(inst)}
-                                          className="text-gray-400 hover:text-green-500 transition"
-                                          title="Marcar como pago"
-                                        >
-                                          ○
-                                        </button>
-                                      ) : (
-                                        <span className="text-gray-300">○</span>
-                                      )
-                                    ) : ''}
-                                  </td>
+                                  <td className="p-2 border-b text-center">{statusCell}</td>
                                 </tr>
                               );
                             })}
@@ -556,7 +614,6 @@ export default function App() {
   const [allExpenses, setAllExpenses] = useState<any[]>([]);
   const [forecastData, setForecastData] = useState<{ month: string; value: number; accumulated: number; installments?: any[] }[]>([]);
   const [shareModalData, setShareModalData] = useState<{ sale: any; client: any; message?: string } | null>(null);
-  const [editingClient, setEditingClient] = useState<any>(null);
   const [editingInstallment, setEditingInstallment] = useState<any>(null);
   const [expandedMonths, setExpandedMonths] = useState<number[]>([]);
 
@@ -656,14 +713,14 @@ export default function App() {
 
   const openClientModal = async (clientId: number) => {
     const client = clients.find(c => c.id === clientId);
-    if (!client) {
+    if (client) {
+      setSelectedClientForModal(client);
+    } else {
       // Buscar cliente se não estiver na lista
       const clientRes = await fetch(`/api/clients`, { headers: { Authorization: `Bearer ${token}` }});
       const allClients = await clientRes.json();
       const foundClient = allClients.find((c: any) => c.id === clientId);
       if (foundClient) setSelectedClientForModal(foundClient);
-    } else {
-      setSelectedClientForModal(client);
     }
     
     // Buscar vendas do cliente
@@ -692,22 +749,6 @@ export default function App() {
       setPage('dashboard');
     } else {
       alert('Erro ao fazer login');
-    }
-  };
-
-  const handleRegister = async () => {
-    const res = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    const data = await res.json();
-    if (data.token) {
-      setToken(data.token);
-      localStorage.setItem('token', data.token);
-      setPage('dashboard');
-    } else {
-      alert('Erro ao registrar');
     }
   };
 
@@ -772,14 +813,14 @@ export default function App() {
 
   const handleClientSearch = (e: any) => {
     const raw = e.target.value;
-    const search = raw.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
-    const phoneSearch = raw.replace(/\D/g, '');
+    const search = raw.toLowerCase().normalize('NFD').replaceAll(/\p{Diacritic}/gu, '');
+    const phoneSearch = raw.replaceAll(/\D/g, '');
     setClientSearch(raw);
     setFilteredClients(
       clients.filter(c => 
         (search && (
-          c.name.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').startsWith(search) ||
-          c.name.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').includes(search)
+          c.name.toLowerCase().normalize('NFD').replaceAll(/\p{Diacritic}/gu, '').startsWith(search) ||
+          c.name.toLowerCase().normalize('NFD').replaceAll(/\p{Diacritic}/gu, '').includes(search)
         )) ||
         (phoneSearch && (
           c.phone.startsWith(phoneSearch) || c.phone.includes(phoneSearch)
@@ -929,6 +970,11 @@ export default function App() {
             🧾 Relação de Cobrança
           </button>
           <button 
+            onClick={() => setPage('mostruario')} 
+            className={`px-4 py-2 rounded ${page === 'mostruario' ? 'bg-white text-purple-600' : 'bg-purple-500'}`}>
+            💎 Mostruário
+          </button>
+          <button 
             onClick={() => setPage('config')} 
             className={`px-4 py-2 rounded ${page === 'config' ? 'bg-white text-purple-600' : 'bg-purple-500'}`}>
             ⚙️ Configurações
@@ -943,8 +989,25 @@ export default function App() {
 
       {/* Modal de Compartilhamento após Pagamento */}
       {shareModalData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          role="button"
+          tabIndex={0}
+          aria-label="Fechar confirmação de pagamento"
+          onClick={() => setShareModalData(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setShareModalData(null);
+            }
+          }}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold text-gray-800">✅ Pagamento Registrado!</h3>
               <button onClick={() => setShareModalData(null)} className="text-gray-500 hover:text-gray-700">✖</button>
@@ -1123,6 +1186,8 @@ export default function App() {
                                       step="0.01"
                                       className="w-20 p-1 border rounded text-right"
                                       defaultValue={inst.amount}
+                                      aria-label={`Editar valor da parcela ${inst.sequence}`}
+                                      title="Editar valor da parcela"
                                       onBlur={(e) => {
                                         handleEditInstallment(inst.id, parseFloat(e.target.value));
                                         setEditingInstallment(null);
@@ -1249,6 +1314,7 @@ export default function App() {
         {page === 'clientes' && <ClientesPage token={token} clients={filteredClients} clientSearch={clientSearch} handleClientSearch={handleClientSearch} handleImportClients={handleImportClients} openClientModal={openClientModal} handleDeleteAllClients={handleDeleteAllClients} />}
         {page === 'historico' && <HistoricoPage token={token} openClientModal={openClientModal} />}
         {page === 'cobranca' && <CobrancaPage token={token} />}
+        {page === 'mostruario' && <MostruarioPage token={token} />}
         {page === 'relatorio' && <RelatorioPage token={token} clients={clients} />}
         {page === 'config' && <ConfigPage token={token} />}
       </div>
@@ -1284,8 +1350,25 @@ export default function App() {
 
       {/* Modal de Estatísticas */}
       {statsModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          role="button"
+          tabIndex={0}
+          aria-label="Fechar modal de estatísticas"
+          onClick={() => setStatsModal(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setStatsModal(null);
+            }
+          }}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">
@@ -2170,6 +2253,358 @@ function DespesasPage({ token }: { token: string }) {
   );
 }
 
+function MostruarioPage({ token }: { token: string }) {
+  const [items, setItems] = useState<any[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [photo, setPhoto] = useState('');
+  const [itemName, setItemName] = useState('');
+  const [itemCode, setItemCode] = useState('');
+  const [factor, setFactor] = useState('');
+  const [baseValue, setBaseValue] = useState('');
+  const [description, setDescription] = useState('');
+
+  useEffect(() => {
+    loadItems();
+  }, []);
+
+  const loadItems = async () => {
+    try {
+      const res = await fetch('/api/showcase', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setItems(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Erro ao carregar mostruário:', error);
+    }
+  };
+
+  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setPhoto(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const calculatePrice = () => {
+    const f = parseFloat(factor);
+    const b = parseFloat(baseValue);
+    if (!isNaN(f) && !isNaN(b) && f > 0 && b > 0) {
+      return (f * b).toFixed(2);
+    }
+    return '0.00';
+  };
+
+  const handleSubmit = async () => {
+    if (!photo || !itemName || !factor || !baseValue) {
+      alert('Preencha foto, nome, fator e valor base');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/showcase', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify({
+          itemName,
+          itemCode: itemCode || null,
+          factor: parseFloat(factor),
+          baseValue: parseFloat(baseValue),
+          price: parseFloat(calculatePrice()),
+          description: description || null,
+          imageBase64: photo
+        })
+      });
+
+      if (res.ok) {
+        alert('✓ Item adicionado ao mostruário!');
+        setPhoto('');
+        setItemName('');
+        setItemCode('');
+        setFactor('');
+        setBaseValue('');
+        setDescription('');
+        setShowForm(false);
+        loadItems();
+      } else {
+        alert('Erro ao adicionar item');
+      }
+    } catch (error) {
+      alert('Erro: ' + error);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Deseja remover este item do mostruário?')) return;
+    
+    try {
+      const res = await fetch(`/api/showcase/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        loadItems();
+      }
+    } catch (error) {
+      console.error('Erro ao deletar:', error);
+    }
+  };
+
+  const shareWhatsApp = (item: any, phone?: string) => {
+    const price = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price);
+    let text = `💎 *VANI E ELO JOIAS*\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    text += `*${item.itemName}*\n`;
+    if (item.itemCode) text += `📦 Código: ${item.itemCode}\n`;
+    if (item.description) text += `\n${item.description}\n`;
+    text += `\n💰 *Valor: ${price}*\n`;
+    text += `\n━━━━━━━━━━━━━━━━━━━━`;
+    
+    const encodedText = encodeURIComponent(text);
+    
+    if (phone) {
+      const cleanPhone = phone.replace(/\D/g, '');
+      window.open(`https://wa.me/55${cleanPhone}?text=${encodedText}`, '_blank');
+    } else {
+      // Abrir WhatsApp sem número específico
+      window.open(`https://wa.me/?text=${encodedText}`, '_blank');
+    }
+  };
+
+  const shareToContact = (item: any) => {
+    const phone = prompt('Digite o número do WhatsApp (com DDD):');
+    if (phone) {
+      shareWhatsApp(item, phone);
+    }
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">💎 Mostruário de Joias</h2>
+            <p className="text-gray-600 text-sm mt-1">Cadastre peças e compartilhe por WhatsApp</p>
+          </div>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition flex items-center gap-2"
+          >
+            {showForm ? '✖ Cancelar' : '➕ Nova Peça'}
+          </button>
+        </div>
+      </div>
+
+      {/* Formulário */}
+      {showForm && (
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h3 className="text-xl font-bold text-gray-800 mb-4">📸 Cadastrar Nova Peça</h3>
+          
+          {/* Captura de Foto */}
+          <div className="mb-4">
+            <label className="block font-semibold mb-2" htmlFor="showcase-photo">📷 Foto da Peça</label>
+            <input
+              id="showcase-photo"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handlePhotoCapture}
+              title="Capturar ou selecionar foto"
+              aria-label="Capturar ou selecionar foto da peça"
+              className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-purple-500 transition"
+            />
+            {photo && (
+              <div className="mt-3">
+                <img src={photo} alt="Preview" className="max-w-xs rounded-lg shadow-md" />
+              </div>
+            )}
+          </div>
+
+          {/* Nome e Código */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block font-semibold mb-2" htmlFor="showcase-item-name">💍 Nome da Peça</label>
+              <input
+                id="showcase-item-name"
+                type="text"
+                placeholder="Ex: Anel de Ouro 18k"
+                value={itemName}
+                onChange={(e) => setItemName(e.target.value)}
+                className="w-full p-3 border rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold mb-2" htmlFor="showcase-item-code">📦 Código (opcional)</label>
+              <input
+                id="showcase-item-code"
+                type="text"
+                placeholder="Ex: AN-123"
+                value={itemCode}
+                onChange={(e) => setItemCode(e.target.value)}
+                className="w-full p-3 border rounded-lg"
+              />
+            </div>
+          </div>
+
+          {/* Calculadora de Preço */}
+          <div className="mb-4 p-4 bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-200 rounded-xl">
+            <h4 className="font-bold text-gray-800 mb-3">🧮 Calcular Preço</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-semibold mb-1" htmlFor="showcase-factor">Fator</label>
+                <input
+                  id="showcase-factor"
+                  type="number"
+                  step="0.01"
+                  placeholder="Ex: 2.5"
+                  value={factor}
+                  onChange={(e) => setFactor(e.target.value)}
+                  className="w-full p-2 border rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1" htmlFor="showcase-base">Valor Base (R$)</label>
+                <input
+                  id="showcase-base"
+                  type="number"
+                  step="0.01"
+                  placeholder="Ex: 1000"
+                  value={baseValue}
+                  onChange={(e) => setBaseValue(e.target.value)}
+                  className="w-full p-2 border rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1">Preço Final</label>
+                <div className="w-full p-2 bg-white border-2 border-green-500 rounded-lg font-bold text-green-600 text-lg">
+                  {formatCurrency(parseFloat(calculatePrice()))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Descrição */}
+          <div className="mb-4">
+            <label className="block font-semibold mb-2" htmlFor="showcase-description">📝 Descrição (opcional)</label>
+            <textarea
+              id="showcase-description"
+              placeholder="Detalhes sobre a peça..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full p-3 border rounded-lg h-24"
+            />
+          </div>
+
+          {/* Botões */}
+          <div className="flex gap-3">
+            <button
+              onClick={handleSubmit}
+              className="flex-1 bg-green-500 hover:bg-green-600 text-white p-3 rounded-lg font-semibold transition"
+            >
+              ✓ Salvar no Mostruário
+            </button>
+            <button
+              onClick={() => {
+                setShowForm(false);
+                setPhoto('');
+                setItemName('');
+                setItemCode('');
+                setFactor('');
+                setBaseValue('');
+                setDescription('');
+              }}
+              className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-6 py-3 rounded-lg font-semibold transition"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Grid de Itens */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {items.map((item) => (
+          <div key={item.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition">
+            {/* Imagem */}
+            {item.imageUrl && (
+              <div className="relative h-64 bg-gray-100">
+                <img
+                  src={item.imageUrl}
+                  alt={item.itemName}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+            
+            {/* Informações */}
+            <div className="p-4">
+              <h3 className="font-bold text-lg text-gray-800 mb-1">{item.itemName}</h3>
+              {item.itemCode && (
+                <p className="text-sm text-gray-500 mb-2">📦 {item.itemCode}</p>
+              )}
+              {item.description && (
+                <p className="text-sm text-gray-600 mb-3">{item.description}</p>
+              )}
+              
+              <div className="bg-green-50 p-3 rounded-lg mb-3">
+                <p className="text-xs text-gray-600">Fator: {item.factor} × Base: {formatCurrency(item.baseValue)}</p>
+                <p className="text-xl font-bold text-green-600 mt-1">{formatCurrency(item.price)}</p>
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => shareWhatsApp(item)}
+                  className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-3 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-1"
+                >
+                  <span>📱</span> Abrir WhatsApp
+                </button>
+                <button
+                  onClick={() => shareToContact(item)}
+                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-3 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-1"
+                >
+                  <span>👤</span> Enviar para
+                </button>
+              </div>
+              
+              <button
+                onClick={() => handleDelete(item.id)}
+                className="w-full mt-2 bg-red-100 hover:bg-red-200 text-red-600 py-2 rounded-lg text-sm font-semibold transition"
+              >
+                🗑️ Remover
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {items.length === 0 && !showForm && (
+        <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+          <div className="text-6xl mb-4">💎</div>
+          <h3 className="text-xl font-bold text-gray-800 mb-2">Mostruário Vazio</h3>
+          <p className="text-gray-600 mb-4">Cadastre suas joias para compartilhar com clientes via WhatsApp</p>
+          <button
+            onClick={() => setShowForm(true)}
+            className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-semibold transition"
+          >
+            ➕ Adicionar Primeira Peça
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ClientesPage({ token, clients, clientSearch, handleClientSearch, handleImportClients, openClientModal, handleDeleteAllClients }: { token: string, clients: any[], clientSearch: string, handleClientSearch: any, handleImportClients: any, openClientModal: (id: number) => void, handleDeleteAllClients: any }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -2558,6 +2993,8 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
                 className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-600 focus:outline-none resize-none"
                 rows={3}
                 placeholder="Digite o motivo da exclusão (obrigatório)..."
+                title="Motivo da exclusão"
+                aria-label="Motivo da exclusão"
                 autoFocus
               />
             </div>
@@ -2778,7 +3215,14 @@ function CobrancaPage({ token }: { token: string }) {
         </div>
         <div className="flex items-center gap-2">
           <label className="text-sm text-gray-700">Mês:</label>
-          <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="border rounded px-2 py-1" />
+          <input
+            type="month"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="border rounded px-2 py-1"
+            title="Selecionar mês para relatório"
+            aria-label="Selecionar mês para relatório"
+          />
         </div>
         <div className="flex gap-2">
           <button onClick={handlePrint} className="px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm" title="Versão detalhada com todos os produtos">🖨️ PDF Detalhado</button>
@@ -3713,8 +4157,25 @@ function ConfigPage({ token }: { token: string }) {
 
             {/* Modal de Edição */}
             {editingUser && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setEditingUser(null)}>
-                <div className="bg-white rounded-xl shadow-2xl max-w-md w-full" onClick={e => e.stopPropagation()}>
+              <div
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                onClick={() => setEditingUser(null)}
+                role="button"
+                tabIndex={0}
+                aria-label="Fechar edição de usuário"
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setEditingUser(null);
+                  }
+                }}
+              >
+                <div
+                  className="bg-white rounded-xl shadow-2xl max-w-md w-full"
+                  onClick={e => e.stopPropagation()}
+                  role="dialog"
+                  aria-modal="true"
+                >
                   <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white p-6 rounded-t-xl">
                     <div className="flex justify-between items-start">
                       <div>

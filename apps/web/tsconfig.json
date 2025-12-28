@@ -5,6 +5,8 @@
     "jsx": "react-jsx",
     "moduleResolution": "node",
     "strict": true,
-    "baseUrl": "."
+    "baseUrl": ".",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
   }
 }
