@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+apps/web/node_modules/
+apps/api/node_modules/
+
+# Builds
+dist/
+apps/web/dist/
+apps/api/dist/
+apps/desktop/dist/
+
+# Env
+.env
+.env.local
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
