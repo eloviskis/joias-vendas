@@ -31,7 +31,6 @@ app.register(fastifyStatic, {
 const prisma = process.env.DATABASE_URL
   ? new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } })
   : new PrismaClient();
-  : new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev';
 
 // WhatsApp provider (dinâmico via settings)
