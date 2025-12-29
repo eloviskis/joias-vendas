@@ -1,5 +1,8 @@
 FROM node:22-slim
-RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# Install openssl and fonts so Sharp can render text (DejaVu provides full glyph set)
+RUN apt-get update \
+	&& apt-get install -y openssl fonts-dejavu-core fontconfig \
+	&& rm -rf /var/lib/apt/lists/*
 WORKDIR /usr/src/app
 COPY package*.json ./
 RUN npm install
