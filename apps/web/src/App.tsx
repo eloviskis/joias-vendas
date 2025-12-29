@@ -44,231 +44,6 @@ function PaymentModal({ installment, onConfirm, onClose }: Readonly<{
         </div>
 
         <div className="p-6">
-          <div className="bg-gray-50 rounded-lg p-4 mb-4">
-            <p className="font-semibold text-gray-800">👤 {installment.sale.client?.name || 'Cliente'}</p>
-            <p className="text-sm text-gray-600 mt-1">💎 {installment.sale.itemName}</p>
-            <p className="text-sm text-gray-600">📋 Parcela {installment.sequence}</p>
-            <p className="font-bold text-green-600 mt-2 text-lg">{formatCurrency(installment.amount)}</p>
-          </div>
-
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="paidAt">📅 Data do Pagamento</label>
-            <input
-              id="paidAt"
-              type="date"
-              value={paidAt}
-              onChange={(e) => setPaidAt(e.target.value)}
-              title="Data do pagamento"
-              className="w-full border-2 border-gray-200 rounded-lg p-3 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
-            />
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 p-3 rounded-lg font-semibold transition"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={() => onConfirm(installment.id, paidAt)}
-              className="flex-1 bg-green-500 hover:bg-green-600 text-white p-3 rounded-lg font-semibold transition flex items-center justify-center gap-2"
-            >
-              ✓ Confirmar Pagamento
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Componente Modal de Compartilhamento do Carnê
-function ShareCarneModal({ sale, client, onClose }: Readonly<{ sale: any, client: any, onClose: () => void }>) {
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  };
-
-  const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-
-  // Gerar texto do carnê para WhatsApp
-  const generateCarneText = () => {
-    let text = `💎 *VANI E ELO JOIAS*\n`;
-    text += `━━━━━━━━━━━━━━━━━━━━\n`;
-    text += `👤 Cliente: *${client.name}*\n`;
-    text += `📅 Data: ${new Date(sale.saleDate).toLocaleDateString('pt-BR')}\n\n`;
-    text += `💍 *${sale.itemName}*\n`;
-    if (sale.itemCode) text += `📦 Código: ${sale.itemCode}\n`;
-    text += `💰 Valor Total: *${formatCurrency(sale.totalValue)}*\n`;
-    text += `📊 Parcelas: ${sale.installments}x de ${formatCurrency(sale.totalValue / sale.installments)}\n\n`;
-    text += `━━━━━━━━━━━━━━━━━━━━\n`;
-    text += `📋 *CONTROLE DE PARCELAS*\n`;
-    text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
-
-    if (sale.installmentsR) {
-      const byYear: { [year: number]: any[] } = {};
-      sale.installmentsR.forEach((inst: any) => {
-        const year = new Date(inst.dueDate).getFullYear();
-        if (!byYear[year]) byYear[year] = [];
-        byYear[year].push(inst);
-      });
-
-      Object.keys(byYear).sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach(year => {
-        text += `📅 *ANO ${year}*\n`;
-        byYear[Number(year)].forEach((inst: any) => {
-          const month = months[new Date(inst.dueDate).getMonth()];
-          const status = inst.paid ? '✅' : '⬜';
-          text += `${status} ${month.substring(0, 3)}: ${formatCurrency(inst.amount)}\n`;
-        });
-        text += `\n`;
-      });
-    }
-
-    text += `━━━━━━━━━━━━━━━━━━━━\n`;
-    text += `✨ Obrigada pela preferência!`;
-    return text;
-  };
-
-  // Enviar via WhatsApp
-  const sendWhatsApp = () => {
-    const text = encodeURIComponent(generateCarneText());
-    const phone = client.phone.replaceAll(/\D/g, '');
-    const url = `https://wa.me/55${phone}?text=${text}`;
-    window.open(url, '_blank');
-  };
-
-  // Copiar texto
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(generateCarneText());
-    alert('Texto copiado! Cole no WhatsApp ou onde preferir.');
-  };
-
-  // Imprimir carnê
-  const printCarne = () => {
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      // Agrupar parcelas por ano
-      const byYear: { [year: number]: any[] } = {};
-      if (sale.installmentsR) {
-        sale.installmentsR.forEach((inst: any) => {
-          const year = new Date(inst.dueDate).getFullYear();
-          if (!byYear[year]) byYear[year] = [];
-          byYear[year].push(inst);
-        });
-      }
-
-      const yearsHtml = Object.keys(byYear).sort((a, b) => a.localeCompare(b, 'pt-BR')).map(year => `
-        <div class="year-section">
-          <div class="year-title">ANO: ${year}</div>
-          <table>
-            <thead>
-              <tr>
-                <th>Mês</th>
-                <th>Valor</th>
-                <th>Pago</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${months.map((m, idx) => {
-                const inst = byYear[Number(year)]?.find((i: any) => new Date(i.dueDate).getMonth() === idx);
-                if (!inst) return `<tr><td>${m}</td><td class="amount">—</td><td class="status"></td></tr>`;
-                return `<tr class="${inst.paid ? 'paid' : ''}">
-                  <td>${m}</td>
-                  <td class="amount">${formatCurrency(inst.amount)}</td>
-                  <td class="status">${inst.paid ? '✓' : '○'}</td>
-                </tr>`;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
-      `).join('');
-
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Carnê - ${client.name}</title>
-            <style>
-              body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
-              .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-              .header h1 { margin: 0; font-size: 24px; }
-              .client-info { margin-bottom: 20px; }
-              .sale-info { margin-bottom: 20px; padding: 10px; background: #f5f5f5; border-radius: 5px; }
-              .parcelas-title { text-align: center; font-weight: bold; font-size: 18px; margin: 20px 0; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 10px 0; }
-              .year-section { margin-bottom: 20px; break-inside: avoid; }
-              .year-title { font-weight: bold; background: #eee; padding: 5px 10px; }
-              table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-              th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-              th { background: #f0f0f0; }
-              .paid { background: #d4edda; }
-              .amount { text-align: right; font-family: monospace; }
-              .status { text-align: center; font-size: 18px; }
-              @media print { 
-                body { padding: 10px; } 
-                .no-print { display: none; }
-              }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <h1>💎 Vani e Elo Joias</h1>
-            </div>
-            <div class="client-info">
-              <p><strong>Cliente:</strong> ${client.name}</p>
-              <p><strong>Telefone:</strong> ${client.phone}</p>
-            </div>
-            <div class="sale-info">
-              <p><strong>Peça:</strong> ${sale.itemName}</p>
-              ${sale.itemCode ? `<p><strong>Código:</strong> ${sale.itemCode}</p>` : ''}
-              <p><strong>Data da Venda:</strong> ${new Date(sale.saleDate).toLocaleDateString('pt-BR')}</p>
-              <p><strong>Valor Total:</strong> ${formatCurrency(sale.totalValue)}</p>
-              <p><strong>Parcelas:</strong> ${sale.installments}x de ${formatCurrency(sale.totalValue / sale.installments)}</p>
-            </div>
-            <div class="parcelas-title">CONTROLE DE PARCELAS</div>
-            ${yearsHtml || '<p>Nenhuma parcela</p>'}
-            <script>
-              window.onload = function() { 
-                setTimeout(function() { window.print(); }, 500); 
-              };
-            </script>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-    }
-  };
-
-  return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-      role="button"
-      tabIndex={0}
-      aria-label="Fechar modal de compartilhamento"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClose();
-        }
-      }}
-    >
-      <div
-        className="bg-white rounded-xl shadow-2xl max-w-md w-full"
-        onClick={e => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="bg-gradient-to-r from-green-500 to-teal-500 text-white p-6 rounded-t-xl">
-          <div className="flex justify-between items-start">
-            <div>
-              <h2 className="text-xl font-bold">✅ Venda Registrada!</h2>
-              <p className="text-sm mt-1 opacity-90">Enviar carnê para o cliente?</p>
-            </div>
-            <button onClick={onClose} className="text-2xl hover:opacity-70">×</button>
-          </div>
-        </div>
-
-        <div className="p-6">
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
             <p className="font-semibold text-gray-800">👤 {client.name}</p>
             <p className="text-sm text-gray-600">📱 {client.phone}</p>
@@ -2611,84 +2386,42 @@ function MostruarioPage({ token }: { token: string }) {
   const shareWhatsApp = async (item: any, phone?: string) => {
     console.log('shareWhatsApp chamado para item:', item);
     const price = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price);
-    
-    @@  // Montar mensagem formatada
-    @@  let text = `💎 *VANI E ELO JOIAS*\n`;
-    @@  text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
-    @@  text += `*${item.itemName}*\n`;
-    @@  if (item.itemCode) text += `📦 Código: ${item.itemCode}\n`;
-    @@  if (item.description) text += `\n${item.description}\n`;
-    @@  text += `\n💰 *Valor: ${price}*\n`;
-    @@  text += `\n━━━━━━━━━━━━━━━━━━━━`;
-    @@  
-    @@  try {
-    @@    let imageBlob: Blob | null = null;
-    @@    
-    @@    // Montar mensagem formatada
-    @@    let text = `💎 *VANI E ELO JOIAS*\n`;
-    @@    text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
-    @@    text += `*${item.itemName}*\n`;
-    @@    if (item.itemCode) text += `📦 Código: ${item.itemCode}\n`;
-    @@    if (item.description) text += `\n${item.description}\n`;
-    @@    text += `\n💰 *Valor: ${price}*\n`;
-    @@    text += `\n━━━━━━━━━━━━━━━━━━━━`;
-    @@    
-    @@    try {
-    @@      let imageBlob: Blob | null = null;
-    @@      
-    @@      // Buscar imagem se existir
-    @@      if (item.imageUrl) {
-    @@        const imageUrl = item.imageUrl.startsWith('http') ? item.imageUrl : `${window.location.origin}${item.imageUrl}`;
-    @@        const response = await fetch(imageUrl);
-    @@        imageBlob = await response.blob();
-    @@      }
-    @@      
-    @@      // Copiar para clipboard usando Clipboard API v2 (com imagem e texto)
-    @@      if (imageBlob && navigator.clipboard) {
-    @@        const clipboardItems = [
-    @@          new ClipboardItem({
-    @@            'text/plain': new Blob([text], { type: 'text/plain' }),
-    @@            'image/jpeg': imageBlob
-    @@          })
-    @@        ];
-    @@        
-    @@        try {
-    @@          await navigator.clipboard.write(clipboardItems);
-    @@          console.log('✅ Imagem e texto copiados para clipboard');
-    @@        } catch (clipboardError) {
-    @@          console.warn('Clipboard.write não funcionou, tentando texto só:', clipboardError);
-    @@          // Fallback: copiar só o texto
-    @@          await navigator.clipboard.writeText(text);
-    @@        }
-    @@      } else if (navigator.clipboard) {
-    @@        await navigator.clipboard.writeText(text);
-    @@      }
-    @@      
-    @@      // Abrir WhatsApp Web ou App com a mensagem
-    @@      if (phone) {
-    @@        const cleanPhone = phone.replace(/\D/g, '');
-    @@        window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}`, '_blank');
-    @@      } else {
-    @@        window.open(`https://web.whatsapp.com/send`, '_blank');
-    @@      }
-    @@      
-    @@      // Notificar usuário que precisa colar
-    @@      setTimeout(() => {
-    @@        alert('✅ Imagem copiada!\n\nFaça paste (Ctrl+V ou Cmd+V) no WhatsApp');
-    @@      }, 500);
-    @@      
-    @@    } catch (error) {
-    @@      console.error('Erro ao compartilhar no WhatsApp:', error);
-    @@      alert('⚠️ Erro ao copiar imagem. Tentando apenas texto...');
-    @@      // Fallback: enviar só o texto
-    @@      const encodedText = encodeURIComponent(text);
-    @@      if (phone) {
-    @@        const cleanPhone = phone.replace(/\D/g, '');
-    @@        window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
-    @@      } else {
-    @@        window.open(`https://web.whatsapp.com/send?text=${encodedText}`, '_blank');
-    @@      }
-    @@    }
+
+    // Montar mensagem somente em texto, sem link/preview
+    let text = `💎 VANI E ELO JOIAS
+`;
+    text += `━━━━━━━━━━━━━━━━━━━━
+`;
+    text += `Imagem_Pequena
+`;
+    text += `${item.itemName || ''}
+
+`;
+    text += `💰 Valor: ${price}
+
+`;
+    text += `━━━━━━━━━━━━━━━━━━━━`;
+
+    const encodedText = encodeURIComponent(text);
+
+    if (phone) {
+      const cleanPhone = phone.replace(/\D/g, '');
+      window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
+    } else {
+      window.open(`https://web.whatsapp.com/send?text=${encodedText}`, '_blank');
+    }
+  };
+
+  const shareToContact = async (item: any) => {
+    const phone = prompt('Digite o número do WhatsApp (com DDD):');
+    if (phone) {
+      await shareWhatsApp(item, phone);
+    }
+  };
+
+  const formatCurrency = (value: any) => {
+    const num = typeof value === 'number' ? value : parseFloat(value || '0');
+    if (isNaN(num)) return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(0);
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
   };
 
