@@ -1068,11 +1068,18 @@ app.get('/message-logs', async () => {
 });
 
 // Mostruário (Showcase)
-app.get('/showcase', async (req: any) => {
+app.get('/showcase', async (req: any, reply) => {
   // Verificar autenticação
   const authHeader = req.headers.authorization;
   if (!authHeader) {
-    return { error: 'Unauthorized' };
+    return reply.code(401).send({ error: 'Unauthorized' });
+  }
+
+  try {
+    const token = authHeader.replace('Bearer ', '');
+    jwt.verify(token, JWT_SECRET);
+  } catch (error) {
+    return reply.code(401).send({ error: 'Invalid token' });
   }
 
   return prisma.showcase.findMany({
@@ -1226,6 +1233,13 @@ app.delete('/showcase/:id', async (req: any, reply) => {
 app.patch('/showcase/:id', async (req: any, reply) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) return reply.code(401).send({ error: 'Unauthorized' });
+
+  try {
+    const token = authHeader.replace('Bearer ', '');
+    jwt.verify(token, JWT_SECRET);
+  } catch (error) {
+    return reply.code(401).send({ error: 'Invalid token' });
+  }
 
   const id = Number.parseInt(req.params.id);
   const { name, itemName, itemCode, factor, weight, baseValue, price, description, imageBase64, sold } = req.body || {};
