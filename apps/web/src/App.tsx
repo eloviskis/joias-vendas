@@ -293,14 +293,23 @@ function ShareCarneModal({ sale, client, onClose }: Readonly<{ sale: any, client
                     `📸 *Foto da Peça* 📸\n\n` +
                     `💍 *${sale.itemName}*\n` +
                     `${sale.itemCode ? `📦 Código: ${sale.itemCode}\n` : ''}` +
-                    `💰 Valor: *${formatCurrency(sale.totalValue)}*\n\n` +
-                    `🖼️ Veja a foto da peça:\n` +
-                    `${photoLink}\n\n` +
-                    `👆 Clique no link acima para visualizar!`
+                    `💰 Valor: *${formatCurrency(sale.totalValue)}*`
                   );
                   const phone = client.phone.replaceAll(/\D/g, '');
-                  const url = `https://wa.me/55${phone}?text=${photoMessage}`;
-                  window.open(url, '_blank');
+                  
+                  // Fazer download automático da foto
+                  const downloadLink = document.createElement('a');
+                  downloadLink.href = photoLink;
+                  downloadLink.download = `foto-${sale.itemName.replace(/\s+/g, '-')}.jpg`;
+                  document.body.appendChild(downloadLink);
+                  downloadLink.click();
+                  document.body.removeChild(downloadLink);
+                  
+                  // Abrir WhatsApp após download
+                  setTimeout(() => {
+                    const url = `https://wa.me/55${phone}?text=${photoMessage}`;
+                    window.open(url, '_blank');
+                  }, 500);
                 }}
                 className="w-full bg-cyan-500 hover:bg-cyan-600 text-white p-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition"
               >
@@ -2583,29 +2592,44 @@ function MostruarioPage({ token }: { token: string }) {
     const price = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price);
     const imageLink = item.imageUrl ? `${window.location.origin}${item.imageUrl}` : '';
     
-    // Montar mensagem com link de imagem clicável
+    // Montar mensagem
     let text = `💎 *VANI E ELO JOIAS*\n`;
     text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
     text += `*${item.itemName}*\n`;
     if (item.itemCode) text += `📦 Código: ${item.itemCode}\n`;
     if (item.description) text += `\n${item.description}\n`;
     text += `\n💰 *Valor: ${price}*\n`;
-    
-    // Adicionar link da imagem ao final (WhatsApp gera preview automaticamente)
-    if (imageLink) {
-      text += `\n🖼️ Veja a foto: ${imageLink}`;
-    }
-    
     text += `\n━━━━━━━━━━━━━━━━━━━━`;
     
     const encodedText = encodeURIComponent(text);
     
-    if (phone) {
-      const cleanPhone = phone.replace(/\D/g, '');
-      window.open(`https://wa.me/55${cleanPhone}?text=${encodedText}`, '_blank');
+    // Se tiver imagem, fazer download automático e abrir WhatsApp
+    if (imageLink) {
+      // Fazer download da imagem
+      const link = document.createElement('a');
+      link.href = imageLink;
+      link.download = `${item.itemName.replace(/\s+/g, '-')}-${item.id}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Aguardar um pouco e abrir WhatsApp
+      setTimeout(() => {
+        if (phone) {
+          const cleanPhone = phone.replace(/\D/g, '');
+          window.open(`https://wa.me/55${cleanPhone}?text=${encodedText}`, '_blank');
+        } else {
+          window.open(`https://wa.me/?text=${encodedText}`, '_blank');
+        }
+      }, 500);
     } else {
-      // Abrir WhatsApp sem número específico
-      window.open(`https://wa.me/?text=${encodedText}`, '_blank');
+      // Sem imagem, apenas enviar mensagem
+      if (phone) {
+        const cleanPhone = phone.replace(/\D/g, '');
+        window.open(`https://wa.me/55${cleanPhone}?text=${encodedText}`, '_blank');
+      } else {
+        window.open(`https://wa.me/?text=${encodedText}`, '_blank');
+      }
     }
   };
 
