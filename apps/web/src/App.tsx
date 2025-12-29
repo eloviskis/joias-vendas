@@ -287,19 +287,30 @@ function ShareCarneModal({ sale, client, onClose }: Readonly<{ sale: any, client
 
             {sale.photoUrl && (
               <button
-                onClick={() => {
+                onClick={async () => {
                   const filename = sale.photoUrl.split('/').pop();
                   const downloadUrl = `/api/download/${filename}`;
                   
-                  const photoMessage = encodeURIComponent(
+                  const text =
                     `📸 *Foto da Peça* 📸\n\n` +
                     `💍 *${sale.itemName}*\n` +
                     `${sale.itemCode ? `📦 Código: ${sale.itemCode}\n` : ''}` +
-                    `💰 Valor: *${formatCurrency(sale.totalValue)}*`
-                  );
+                    `💰 Valor: *${formatCurrency(sale.totalValue)}*`;
                   const phone = client.phone.replaceAll(/\D/g, '');
                   
-                  // Fazer download automático da foto
+                  try {
+                    const res = await fetch(downloadUrl);
+                    const blob = await res.blob();
+                    const shareFile = new File([blob], `foto-${sale.itemName.replace(/\s+/g, '-')}.jpg`, { type: 'image/jpeg' });
+                    if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
+                      await navigator.share({ files: [shareFile], text });
+                      return;
+                    }
+                  } catch (err) {
+                    console.warn('Web Share API falhou, usando fallback:', err);
+                  }
+
+                  // Fallback: baixar e abrir WhatsApp com texto
                   const downloadLink = document.createElement('a');
                   downloadLink.href = downloadUrl;
                   downloadLink.download = `foto-${sale.itemName.replace(/\s+/g, '-')}.jpg`;
@@ -307,9 +318,8 @@ function ShareCarneModal({ sale, client, onClose }: Readonly<{ sale: any, client
                   downloadLink.click();
                   document.body.removeChild(downloadLink);
                   
-                  // Abrir WhatsApp após download
                   setTimeout(() => {
-                    const url = `https://wa.me/55${phone}?text=${photoMessage}`;
+                    const url = `https://wa.me/55${phone}?text=${encodeURIComponent(text)}`;
                     window.open(url, '_blank');
                   }, 500);
                 }}
@@ -2590,7 +2600,7 @@ function MostruarioPage({ token }: { token: string }) {
     }
   };
 
-  const shareWhatsApp = (item: any, phone?: string) => {
+  const shareWhatsApp = async (item: any, phone?: string) => {
     const price = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price);
     
     // Montar mensagem
@@ -2604,13 +2614,29 @@ function MostruarioPage({ token }: { token: string }) {
     
     const encodedText = encodeURIComponent(text);
     
-    // Se tiver imagem, fazer download automático via endpoint de download
+    // Se tiver imagem, tentar usar Web Share API com arquivo (envia a foto, não o link)
     if (item.imageUrl) {
-      // Extrair nome do arquivo do caminho
+      try {
+        const filename = item.imageUrl.split('/').pop();
+        const downloadUrl = `/api/download/${filename}`;
+        const res = await fetch(downloadUrl);
+        const blob = await res.blob();
+        const shareFile = new File([blob], `${item.itemName.replace(/\s+/g, '-')}.jpg`, { type: 'image/jpeg' });
+        
+        if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
+          await navigator.share({
+            files: [shareFile],
+            text
+          });
+          return;
+        }
+      } catch (err) {
+        console.warn('Web Share API falhou, usando fallback:', err);
+      }
+
+      // Fallback: baixar e abrir WhatsApp com texto
       const filename = item.imageUrl.split('/').pop();
       const downloadUrl = `/api/download/${filename}`;
-      
-      // Fazer download
       const link = document.createElement('a');
       link.href = downloadUrl;
       link.download = `${item.itemName.replace(/\s+/g, '-')}.jpg`;
@@ -2618,7 +2644,6 @@ function MostruarioPage({ token }: { token: string }) {
       link.click();
       document.body.removeChild(link);
       
-      // Aguardar um pouco e abrir WhatsApp
       setTimeout(() => {
         if (phone) {
           const cleanPhone = phone.replace(/\D/g, '');
@@ -2638,10 +2663,10 @@ function MostruarioPage({ token }: { token: string }) {
     }
   };
 
-  const shareToContact = (item: any) => {
+  const shareToContact = async (item: any) => {
     const phone = prompt('Digite o número do WhatsApp (com DDD):');
     if (phone) {
-      shareWhatsApp(item, phone);
+      await shareWhatsApp(item, phone);
     }
   };
 
