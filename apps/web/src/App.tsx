@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Fragment } from 'react';
+import React, { useState, useEffect, useMemo, Fragment } from 'react';
 import { ImageEditor } from './components/ImageEditor';
 
 // Componente Modal de Pagamento
@@ -2910,6 +2910,16 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [saleToDelete, setSaleToDelete] = useState<any>(null);
   const [deleteReason, setDeleteReason] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
+
+  const filteredClients = useMemo(() => {
+    if (!clientSearch.trim()) return clients;
+    const term = clientSearch.toLowerCase();
+    return clients.filter(c =>
+      c.name?.toLowerCase().includes(term) ||
+      c.phone?.toLowerCase().includes(term)
+    );
+  }, [clients, clientSearch]);
 
   useEffect(() => {
     loadClients();
@@ -3008,8 +3018,31 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
       {/* Lista de Clientes */}
       <div className="bg-white rounded-xl shadow-lg p-6">
         <h2 className="text-2xl font-bold text-gray-800 mb-6">👥 Clientes</h2>
+        <div className="mb-4">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Buscar cliente</label>
+          <input
+            type="text"
+            list="clientSuggestions"
+            value={clientSearch}
+            onChange={(e) => {
+              const value = e.target.value;
+              setClientSearch(value);
+              const match = clients.find(c => c.name?.toLowerCase() === value.toLowerCase());
+              if (match) {
+                loadClientSales(match.id);
+              }
+            }}
+            placeholder="Nome ou telefone"
+            className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-600 focus:outline-none"
+          />
+          <datalist id="clientSuggestions">
+            {clients.map((c) => (
+              <option key={c.id} value={c.name} />
+            ))}
+          </datalist>
+        </div>
         <div className="space-y-2 max-h-96 overflow-y-auto">
-          {clients.map((client: any) => {
+          {filteredClients.map((client: any) => {
             const clientSales = allSales.filter(s => s.clientId === client.id);
             const totalVendido = clientSales.reduce((sum, s) => sum + s.totalValue, 0);
             
