@@ -1058,13 +1058,25 @@ app.get('/message-logs', async () => {
 });
 
 // Mostruário (Showcase)
-app.get('/showcase', async () => {
+app.get('/showcase', async (req: any) => {
+  // Verificar autenticação
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return { error: 'Unauthorized' };
+  }
+
   return prisma.showcase.findMany({
     orderBy: { createdAt: 'desc' }
   });
 });
 
 app.post('/showcase', async (req: any, reply) => {
+  // Verificar autenticação
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return reply.code(401).send({ error: 'Unauthorized' });
+  }
+
   const { itemName, itemCode, factor, baseValue, price, description, imageBase64 } = req.body || {};
   
   if (!itemName || !factor || !baseValue || !price) {
@@ -1080,7 +1092,7 @@ app.post('/showcase', async (req: any, reply) => {
         fs.mkdirSync(uploadsDir, { recursive: true });
       }
       
-      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
       const buffer = Buffer.from(base64Data, 'base64');
       const filename = `showcase-${Date.now()}.jpg`;
       const filepath = path.join(uploadsDir, filename);
@@ -1089,25 +1101,37 @@ app.post('/showcase', async (req: any, reply) => {
       imageUrl = `/uploads/${filename}`;
     } catch (error) {
       console.error('Error saving image:', error);
+      return reply.code(500).send({ error: 'Error saving image', details: error });
     }
   }
 
-  const item = await prisma.showcase.create({
-    data: {
-      itemName,
-      itemCode: itemCode || null,
-      factor,
-      baseValue,
-      price,
-      description: description || null,
-      imageUrl
-    }
-  });
+  try {
+    const item = await prisma.showcase.create({
+      data: {
+        itemName,
+        itemCode: itemCode || null,
+        factor,
+        baseValue,
+        price,
+        description: description || null,
+        imageUrl
+      }
+    });
 
-  return item;
+    return item;
+  } catch (error: any) {
+    console.error('Error creating showcase item:', error);
+    return reply.code(500).send({ error: 'Error creating item', details: error.message });
+  }
 });
 
 app.delete('/showcase/:id', async (req: any, reply) => {
+  // Verificar autenticação
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return reply.code(401).send({ error: 'Unauthorized' });
+  }
+
   const id = parseInt(req.params.id);
   
   // Buscar item para deletar a imagem
