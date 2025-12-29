@@ -1223,33 +1223,64 @@ app.post('/showcase', async (req: any, reply) => {
       
       // Altura da faixa de preço (15% da altura da imagem, mínimo 60px)
       const bannerHeight = Math.max(60, Math.floor(height * 0.15));
-      const fontSize = Math.floor(bannerHeight * 0.5); // 50% da altura da faixa
+      const fontSize = Math.floor(bannerHeight * 0.55); // Tamanho da fonte
       
       // Formatar o preço
       const priceText = finalPrice 
         ? `R$ ${finalPrice.toFixed(2).replace('.', ',')}`
         : 'Consulte o preço';
       
-      // Criar SVG com faixa de preço (precisa de espaçamento correto)
+      // Criar SVG para a faixa de preço (usando sharp para renderizar)
       const svgBanner = `<svg width="${width}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <style>
-            text { font-family: Arial, sans-serif; font-weight: bold; }
-          </style>
-        </defs>
-        <rect width="${width}" height="${bannerHeight}" fill="#1a1a1a" opacity="0.85"/>
-        <text x="${width/2}" y="${bannerHeight/2}" font-size="${fontSize}" fill="#FFD700" stroke="#000" stroke-width="2" text-anchor="middle" dominant-baseline="middle">${priceText}</text>
+        <rect width="${width}" height="${bannerHeight}" fill="#1a1a1a" opacity="0.9"/>
+        <text x="${width/2}" y="${Math.floor(bannerHeight/2)}" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="bold" fill="#FFD700">${priceText}</text>
       </svg>`;
       
-      // Compor imagem original com faixa de preço usando composição
-      await image
-        .resize(width, height, { fit: 'cover' })
+      try {
+        // Render SVG para PNG buffer usando sharp
+        const bannerBuffer = await sharp(Buffer.from(svgBanner)).png().toBuffer();
+        
+        // Compor imagem original com faixa de preço
+        await image
+          .resize(width, height, { fit: 'cover' })
+          .composite([{
+            input: bannerBuffer,
+            gravity: 'south'
+          }])
+          .jpeg({ quality: 90 })
+          .toFile(filepath);
+      } catch (svgError) {
+        // Fallback: se SVG falhar, criar banner simples em PNG
+        console.warn('SVG render failed, using fallback:', svgError);
+        
+        // Criar uma imagem simples com texto usando sharp
+        const bannerWidth = width;
+        const bannerPng = await sharp({
+          create: {
+            width: bannerWidth,
+            height: bannerHeight,
+            channels: 4,
+            background: { r: 26, g: 26, b: 26, alpha: 0.9 }
+          }
+        })
         .composite([{
-          input: Buffer.from(svgBanner),
-          gravity: 'south'
+          input: Buffer.from(`<svg width="${bannerWidth}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
+            <text x="${bannerWidth/2}" y="${Math.floor(bannerHeight/2)}" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-size="${fontSize}" font-weight="bold" fill="#FFD700">${priceText}</text>
+          </svg>`),
+          gravity: 'center'
         }])
-        .jpeg({ quality: 90 })
-        .toFile(filepath);
+        .png()
+        .toBuffer();
+        
+        await image
+          .resize(width, height, { fit: 'cover' })
+          .composite([{
+            input: bannerPng,
+            gravity: 'south'
+          }])
+          .jpeg({ quality: 90 })
+          .toFile(filepath);
+      }
       
       imageUrl = `/uploads/${filename}`;
     } catch (error) {
@@ -1362,26 +1393,58 @@ app.patch('/showcase/:id', async (req: any, reply) => {
       const width = metadata.width || 800;
       const height = metadata.height || 600;
       const bannerHeight = Math.max(60, Math.floor(height * 0.15));
-      const fontSize = Math.floor(bannerHeight * 0.5);
+      const fontSize = Math.floor(bannerHeight * 0.55);
       const priceText = finalPrice ? `R$ ${finalPrice.toFixed(2).replace('.', ',')}` : 'Consulte o preço';
       const svgBanner = `<svg width="${width}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <style>
-            text { font-family: Arial, sans-serif; font-weight: bold; }
-          </style>
-        </defs>
-        <rect width="${width}" height="${bannerHeight}" fill="#1a1a1a" opacity="0.85"/>
-        <text x="${width/2}" y="${bannerHeight/2}" font-size="${fontSize}" fill="#FFD700" stroke="#000" stroke-width="2" text-anchor="middle" dominant-baseline="middle">${priceText}</text>
+        <rect width="${width}" height="${bannerHeight}" fill="#1a1a1a" opacity="0.9"/>
+        <text x="${width/2}" y="${Math.floor(bannerHeight/2)}" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="bold" fill="#FFD700">${priceText}</text>
       </svg>`;
 
-      await image
-        .resize(width, height, { fit: 'cover' })
+      try {
+        // Render SVG para PNG buffer usando sharp
+        const bannerBuffer = await sharp(Buffer.from(svgBanner)).png().toBuffer();
+        
+        // Compor imagem original com faixa de preço
+        await image
+          .resize(width, height, { fit: 'cover' })
+          .composite([{
+            input: bannerBuffer,
+            gravity: 'south'
+          }])
+          .jpeg({ quality: 90 })
+          .toFile(filepath);
+      } catch (svgError) {
+        // Fallback: se SVG falhar, criar banner simples em PNG
+        console.warn('SVG render failed, using fallback:', svgError);
+        
+        // Criar uma imagem simples com texto usando sharp
+        const bannerWidth = width;
+        const bannerPng = await sharp({
+          create: {
+            width: bannerWidth,
+            height: bannerHeight,
+            channels: 4,
+            background: { r: 26, g: 26, b: 26, alpha: 0.9 }
+          }
+        })
         .composite([{
-          input: Buffer.from(svgBanner),
-          gravity: 'south'
+          input: Buffer.from(`<svg width="${bannerWidth}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
+            <text x="${bannerWidth/2}" y="${Math.floor(bannerHeight/2)}" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-size="${fontSize}" font-weight="bold" fill="#FFD700">${priceText}</text>
+          </svg>`),
+          gravity: 'center'
         }])
-        .jpeg({ quality: 90 })
-        .toFile(filepath);
+        .png()
+        .toBuffer();
+        
+        await image
+          .resize(width, height, { fit: 'cover' })
+          .composite([{
+            input: bannerPng,
+            gravity: 'south'
+          }])
+          .jpeg({ quality: 90 })
+          .toFile(filepath);
+      }
 
       // Remove a imagem anterior se existir
       if (item.imageUrl) {
