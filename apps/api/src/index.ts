@@ -1203,27 +1203,18 @@ app.post('/showcase', async (req: any, reply) => {
         ? `R$ ${finalPrice.toFixed(2).replace('.', ',')}`
         : 'Consulte o preço';
       
-      // Criar SVG com faixa de preço
-      const svgBanner = `
-        <svg width="${width}" height="${bannerHeight}">
-          <rect width="${width}" height="${bannerHeight}" fill="#1a1a1a" opacity="0.85"/>
-          <text
-            x="50%"
-            y="50%"
-            text-anchor="middle"
-            dominant-baseline="middle"
-            font-family="Arial, sans-serif"
-            font-size="${fontSize}"
-            font-weight="bold"
-            fill="#FFD700"
-            stroke="#000"
-            stroke-width="2"
-            paint-order="stroke"
-          >${priceText}</text>
-        </svg>
-      `;
+      // Criar SVG com faixa de preço (precisa de espaçamento correto)
+      const svgBanner = `<svg width="${width}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <style>
+            text { font-family: Arial, sans-serif; font-weight: bold; }
+          </style>
+        </defs>
+        <rect width="${width}" height="${bannerHeight}" fill="#1a1a1a" opacity="0.85"/>
+        <text x="${width/2}" y="${bannerHeight/2}" font-size="${fontSize}" fill="#FFD700" stroke="#000" stroke-width="2" text-anchor="middle" dominant-baseline="middle">${priceText}</text>
+      </svg>`;
       
-      // Compor imagem original com faixa de preço
+      // Compor imagem original com faixa de preço usando composição
       await image
         .resize(width, height, { fit: 'cover' })
         .composite([{
@@ -1346,16 +1337,22 @@ app.patch('/showcase/:id', async (req: any, reply) => {
       const bannerHeight = Math.max(60, Math.floor(height * 0.15));
       const fontSize = Math.floor(bannerHeight * 0.5);
       const priceText = finalPrice ? `R$ ${finalPrice.toFixed(2).replace('.', ',')}` : 'Consulte o preço';
-      const svgBanner = `
-        <svg width="${width}" height="${bannerHeight}">
-          <rect width="${width}" height="${bannerHeight}" fill="#1a1a1a" opacity="0.85"/>
-          <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="bold" fill="#FFD700" stroke="#000" stroke-width="2" paint-order="stroke">${priceText}</text>
-        </svg>
-      `;
+      const svgBanner = `<svg width="${width}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <style>
+            text { font-family: Arial, sans-serif; font-weight: bold; }
+          </style>
+        </defs>
+        <rect width="${width}" height="${bannerHeight}" fill="#1a1a1a" opacity="0.85"/>
+        <text x="${width/2}" y="${bannerHeight/2}" font-size="${fontSize}" fill="#FFD700" stroke="#000" stroke-width="2" text-anchor="middle" dominant-baseline="middle">${priceText}</text>
+      </svg>`;
 
       await image
         .resize(width, height, { fit: 'cover' })
-        .composite([{ input: Buffer.from(svgBanner), gravity: 'south' }])
+        .composite([{
+          input: Buffer.from(svgBanner),
+          gravity: 'south'
+        }])
         .jpeg({ quality: 90 })
         .toFile(filepath);
 
