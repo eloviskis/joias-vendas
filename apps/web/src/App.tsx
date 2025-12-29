@@ -2612,30 +2612,71 @@ function MostruarioPage({ token }: { token: string }) {
     console.log('shareWhatsApp chamado para item:', item);
     const price = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price);
     
-    // Montar mensagem COM a URL da imagem
-    let text = `💎 *VANI E ELO JOIAS*\n`;
-    text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
-    text += `*${item.itemName}*\n`;
-    if (item.itemCode) text += `📦 Código: ${item.itemCode}\n`;
-    if (item.description) text += `\n${item.description}\n`;
-    text += `\n💰 *Valor: ${price}*\n`;
-    text += `\n━━━━━━━━━━━━━━━━━━━━`;
-    
-    // Adicionar URL da imagem se existir (WhatsApp vai fazer preview automaticamente)
-    if (item.imageUrl) {
-      const imageUrl = item.imageUrl.startsWith('http') ? item.imageUrl : `${window.location.origin}${item.imageUrl}`;
-      text += `\n\n${imageUrl}`;
-    }
-    
-    const encodedText = encodeURIComponent(text);
-    
-    // Abrir WhatsApp Web ou App com a mensagem (incluindo imagem)
-    if (phone) {
-      const cleanPhone = phone.replace(/\D/g, '');
-      window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
-    } else {
-      window.open(`https://web.whatsapp.com/send?text=${encodedText}`, '_blank');
-    }
+    @@  // Montar mensagem formatada
+    @@  let text = `💎 *VANI E ELO JOIAS*\n`;
+    @@  text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    @@  text += `*${item.itemName}*\n`;
+    @@  if (item.itemCode) text += `📦 Código: ${item.itemCode}\n`;
+    @@  if (item.description) text += `\n${item.description}\n`;
+    @@  text += `\n💰 *Valor: ${price}*\n`;
+    @@  text += `\n━━━━━━━━━━━━━━━━━━━━`;
+    @@  
+    @@  try {
+    @@    let imageBlob: Blob | null = null;
+    @@    
+    @@    // Buscar imagem se existir
+    @@    if (item.imageUrl) {
+    @@      const imageUrl = item.imageUrl.startsWith('http') ? item.imageUrl : `${window.location.origin}${item.imageUrl}`;
+    @@      const response = await fetch(imageUrl);
+    @@      imageBlob = await response.blob();
+    @@    }
+    @@    
+    @@    // Copiar para clipboard usando Clipboard API v2 (com imagem e texto)
+    @@    if (imageBlob && navigator.clipboard) {
+    @@      const clipboardItems = [
+    @@        new ClipboardItem({
+    @@          'text/plain': new Blob([text], { type: 'text/plain' }),
+    @@          'image/jpeg': imageBlob
+    @@        })
+    @@      ];
+    @@      
+    @@      try {
+    @@        await navigator.clipboard.write(clipboardItems);
+    @@        console.log('✅ Imagem e texto copiados para clipboard');
+    @@      } catch (clipboardError) {
+    @@        console.warn('Clipboard.write não funcionou, tentando texto só:', clipboardError);
+    @@        // Fallback: copiar só o texto
+    @@        await navigator.clipboard.writeText(text);
+    @@      }
+    @@    } else if (navigator.clipboard) {
+    @@      await navigator.clipboard.writeText(text);
+    @@    }
+    @@    
+    @@    // Abrir WhatsApp Web ou App com a mensagem
+    @@    if (phone) {
+    @@      const cleanPhone = phone.replace(/\D/g, '');
+    @@      window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}`, '_blank');
+    @@    } else {
+    @@      window.open(`https://web.whatsapp.com/send`, '_blank');
+    @@    }
+    @@    
+    @@    // Notificar usuário que precisa colar
+    @@    setTimeout(() => {
+    @@      alert('✅ Imagem copiada!\n\nFaça paste (Ctrl+V ou Cmd+V) no WhatsApp');
+    @@    }, 500);
+    @@    
+    @@  } catch (error) {
+    @@    console.error('Erro ao compartilhar no WhatsApp:', error);
+    @@    alert('⚠️ Erro ao copiar imagem. Tentando apenas texto...');
+    @@    // Fallback: enviar só o texto
+    @@    const encodedText = encodeURIComponent(text);
+    @@    if (phone) {
+    @@      const cleanPhone = phone.replace(/\D/g, '');
+    @@      window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
+    @@    } else {
+    @@      window.open(`https://web.whatsapp.com/send?text=${encodedText}`, '_blank');
+    @@    }
+    @@  }
   };
 
   const shareToContact = async (item: any) => {
