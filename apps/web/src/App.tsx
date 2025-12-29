@@ -2357,6 +2357,66 @@ function MostruarioPage({ token }: { token: string }) {
     }
   };
 
+  const handleEditItem = (item: any) => {
+    setEditingItemId(item.id);
+    setItemName(item.itemName);
+    setItemCode(item.itemCode || '');
+    setFactor(String(item.factor || ''));
+    setBaseValue(String(item.baseValue || ''));
+    setDescription(item.description || '');
+    setPhoto(item.imageUrl || '');
+    setShowForm(true);
+  };
+
+  const handleUpdateItem = async () => {
+    if (!itemName || !factor || !baseValue) {
+      alert('Preencha nome, fator e valor base');
+      return;
+    }
+
+    try {
+      const body: any = {
+        itemName,
+        itemCode: itemCode || null,
+        factor: parseFloat(factor),
+        baseValue: parseFloat(baseValue),
+        price: parseFloat(calculatePrice()),
+        description: description || null
+      };
+
+      // Se houver uma nova foto (em base64), enviar
+      if (photo && photo.startsWith('data:')) {
+        body.imageBase64 = photo;
+      }
+
+      const res = await fetch(`/api/showcase/${editingItemId}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (res.ok) {
+        alert('✓ Item atualizado!');
+        setEditingItemId(null);
+        setPhoto('');
+        setItemName('');
+        setItemCode('');
+        setFactor('');
+        setBaseValue('');
+        setDescription('');
+        setShowForm(false);
+        loadItems();
+      } else {
+        alert('Erro ao atualizar item');
+      }
+    } catch (error) {
+      alert('Erro: ' + error);
+    }
+  };
+
   const handleDelete = async (id: number) => {
     if (!confirm('Deseja remover este item do mostruário?')) return;
     
@@ -2497,7 +2557,9 @@ function MostruarioPage({ token }: { token: string }) {
       {/* Formulário */}
       {showForm && !showImageEditor && (
         <div className="bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">📸 Cadastrar Nova Peça</h3>
+          <h3 className="text-xl font-bold text-gray-800 mb-4">
+            {editingItemId ? '✏️ Editar Peça' : '📸 Cadastrar Nova Peça'}
+          </h3>
           
           {/* Foto Preview ou Botão */}
           <div className="mb-4">
@@ -2609,14 +2671,15 @@ function MostruarioPage({ token }: { token: string }) {
           {/* Botões */}
           <div className="flex gap-3">
             <button
-              onClick={handleSubmit}
+              onClick={editingItemId ? handleUpdateItem : handleSubmit}
               className="flex-1 bg-green-500 hover:bg-green-600 text-white p-3 rounded-lg font-semibold transition"
             >
-              ✓ Salvar no Mostruário
+              {editingItemId ? '✓ Atualizar Peça' : '✓ Salvar no Mostruário'}
             </button>
             <button
               onClick={() => {
                 setShowForm(false);
+                setEditingItemId(null);
                 setPhoto('');
                 setItemName('');
                 setItemCode('');
@@ -2709,6 +2772,14 @@ function MostruarioPage({ token }: { token: string }) {
                   <span>👤</span> Enviar para
                 </button>
               </div>
+
+              {/* Botão de Editar */}
+              <button
+                onClick={() => handleEditItem(item)}
+                className="w-full mt-2 bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-lg text-sm font-semibold transition"
+              >
+                ✏️ Editar
+              </button>
 
               {/* Controles de Imagem */}
               <div className="flex gap-2 mt-2">
