@@ -294,9 +294,9 @@ function ShareCarneModal({ sale, client, onClose }: Readonly<{ sale: any, client
                     `💍 *${sale.itemName}*\n` +
                     `${sale.itemCode ? `📦 Código: ${sale.itemCode}\n` : ''}` +
                     `💰 Valor: *${formatCurrency(sale.totalValue)}*\n\n` +
-                    `Clique no link abaixo para visualizar a foto:\n` +
+                    `🖼️ Veja a foto da peça:\n` +
                     `${photoLink}\n\n` +
-                    `Verifique acima o carnê com as parcelas! 💎`
+                    `👆 Clique no link acima para visualizar!`
                   );
                   const phone = client.phone.replaceAll(/\D/g, '');
                   const url = `https://wa.me/55${phone}?text=${photoMessage}`;
@@ -2582,16 +2582,20 @@ function MostruarioPage({ token }: { token: string }) {
   const shareWhatsApp = (item: any, phone?: string) => {
     const price = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price);
     const imageLink = item.imageUrl ? `${window.location.origin}${item.imageUrl}` : '';
-    let text = '';
-    if (imageLink) {
-      text += `${imageLink}\n\n`;
-    }
-    text += `💎 *VANI E ELO JOIAS*\n`;
+    
+    // Montar mensagem com link de imagem clicável
+    let text = `💎 *VANI E ELO JOIAS*\n`;
     text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
     text += `*${item.itemName}*\n`;
     if (item.itemCode) text += `📦 Código: ${item.itemCode}\n`;
     if (item.description) text += `\n${item.description}\n`;
     text += `\n💰 *Valor: ${price}*\n`;
+    
+    // Adicionar link da imagem ao final (WhatsApp gera preview automaticamente)
+    if (imageLink) {
+      text += `\n🖼️ Veja a foto: ${imageLink}`;
+    }
+    
     text += `\n━━━━━━━━━━━━━━━━━━━━`;
     
     const encodedText = encodeURIComponent(text);
