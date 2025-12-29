@@ -2631,11 +2631,8 @@ function MostruarioPage({ token }: { token: string }) {
         // Mobile: tentar Web Share API com arquivo
         try {
           console.log('Tentando Web Share API (mobile)...');
-          const filename = item.imageUrl.split('/').pop();
-          const downloadUrl = `/api/download/${filename}`;
-          const res = await fetch(downloadUrl, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
+          const imageUrl = item.imageUrl.startsWith('http') ? item.imageUrl : `${window.location.origin}${item.imageUrl}`;
+          const res = await fetch(imageUrl);
           const blob = await res.blob();
           const shareFile = new File([blob], `${item.itemName.replace(/\s+/g, '-')}.jpg`, { type: 'image/jpeg' });
           
@@ -2651,11 +2648,9 @@ function MostruarioPage({ token }: { token: string }) {
         // Desktop: copiar imagem para clipboard e abrir WhatsApp Web
         try {
           console.log('Tentando copiar imagem para clipboard (desktop)...');
-          const filename = item.imageUrl.split('/').pop();
-          const downloadUrl = `/api/download/${filename}`;
-          const res = await fetch(downloadUrl, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
+          const imageUrl = item.imageUrl.startsWith('http') ? item.imageUrl : `${window.location.origin}${item.imageUrl}`;
+          console.log('Baixando imagem de:', imageUrl);
+          const res = await fetch(imageUrl);
           
           if (!res.ok) {
             throw new Error(`Erro ao baixar imagem: ${res.status} ${res.statusText}`);
@@ -2961,10 +2956,9 @@ function MostruarioPage({ token }: { token: string }) {
               {item.imageUrl && (
                 <button
                   onClick={() => {
-                    const filename = item.imageUrl.split('/').pop();
-                    const downloadUrl = `/api/download/${filename}`;
+                    const imageUrl = item.imageUrl.startsWith('http') ? item.imageUrl : `${window.location.origin}${item.imageUrl}`;
                     const link = document.createElement('a');
-                    link.href = downloadUrl;
+                    link.href = imageUrl;
                     link.download = `${item.itemName.replace(/\s+/g, '-')}.jpg`;
                     document.body.appendChild(link);
                     link.click();
