@@ -1077,10 +1077,17 @@ app.post('/showcase', async (req: any, reply) => {
     return reply.code(401).send({ error: 'Unauthorized' });
   }
 
-  const { itemName, itemCode, factor, baseValue, price, description, imageBase64 } = req.body || {};
+  const { name, itemName, itemCode, factor, weight, baseValue, price, description, imageBase64 } = req.body || {};
   
-  if (!itemName || !factor || !baseValue || !price) {
-    return reply.code(400).send({ error: 'Missing required fields' });
+  // Aceitar 'name' ou 'itemName'
+  const finalItemName = name || itemName;
+  // Aceitar 'weight' ou 'baseValue'
+  const finalBaseValue = weight || baseValue;
+  // Se não tiver price, calcular baseado no factor e baseValue
+  const finalPrice = price || (factor && finalBaseValue ? factor * finalBaseValue : null);
+  
+  if (!finalItemName || !factor) {
+    return reply.code(400).send({ error: 'Missing required fields: name and factor are required' });
   }
 
   // Salvar imagem se fornecida
@@ -1108,11 +1115,11 @@ app.post('/showcase', async (req: any, reply) => {
   try {
     const item = await prisma.showcase.create({
       data: {
-        itemName,
+        itemName: finalItemName,
         itemCode: itemCode || null,
-        factor,
-        baseValue,
-        price,
+        factor: Number(factor),
+        baseValue: finalBaseValue ? Number(finalBaseValue) : null,
+        price: finalPrice ? Number(finalPrice) : null,
         description: description || null,
         imageUrl
       }
