@@ -2609,6 +2609,7 @@ function MostruarioPage({ token }: { token: string }) {
   };
 
   const shareWhatsApp = async (item: any, phone?: string) => {
+    console.log('shareWhatsApp chamado para item:', item);
     const price = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price);
     
     // Montar mensagem
@@ -2625,24 +2626,31 @@ function MostruarioPage({ token }: { token: string }) {
     // Se tiver imagem, tentar usar Web Share API com arquivo (envia a foto, não o link)
     if (item.imageUrl) {
       try {
+        console.log('Tentando Web Share API...');
         const filename = item.imageUrl.split('/').pop();
         const downloadUrl = `/api/download/${filename}`;
+        console.log('Baixando de:', downloadUrl);
         const res = await fetch(downloadUrl);
         const blob = await res.blob();
+        console.log('Blob recebido:', blob.type, blob.size);
         const shareFile = new File([blob], `${item.itemName.replace(/\s+/g, '-')}.jpg`, { type: 'image/jpeg' });
         
         if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
+          console.log('Compartilhando via Web Share API');
           await navigator.share({
             files: [shareFile],
             text
           });
           return;
+        } else {
+          console.log('Web Share API não suportado ou não pode compartilhar arquivos');
         }
       } catch (err) {
         console.warn('Web Share API falhou, usando fallback:', err);
       }
 
       // Fallback: baixar e abrir WhatsApp com texto
+      console.log('Usando fallback: download + WhatsApp link');
       const filename = item.imageUrl.split('/').pop();
       const downloadUrl = `/api/download/${filename}`;
       const link = document.createElement('a');
@@ -2662,6 +2670,7 @@ function MostruarioPage({ token }: { token: string }) {
       }, 500);
     } else {
       // Sem imagem, apenas enviar mensagem
+      console.log('Sem imagem, enviando apenas texto');
       if (phone) {
         const cleanPhone = phone.replace(/\D/g, '');
         window.open(`https://wa.me/55${cleanPhone}?text=${encodedText}`, '_blank');
@@ -2872,7 +2881,7 @@ function MostruarioPage({ token }: { token: string }) {
           <div key={item.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition relative">
             {/* Imagem */}
             {item.imageUrl && (
-              <div className="relative h-64 bg-gray-100 cursor-pointer" onClick={() => setSelectedImage(item.imageUrl)}>
+              <div className="relative h-64 bg-gray-100 cursor-pointer" onClick={() => { console.log('Imagem clicada, abrindo modal'); setSelectedImage(item.imageUrl); }}>
                 <img
                   src={item.imageUrl}
                   alt={item.itemName}
@@ -2890,7 +2899,7 @@ function MostruarioPage({ token }: { token: string }) {
             <div className="p-4">
               <h3 
                 className="font-bold text-lg text-gray-800 mb-1 cursor-pointer hover:text-purple-600 transition"
-                onClick={() => item.imageUrl && setSelectedImage(item.imageUrl)}
+                onClick={() => { console.log('Título clicado, abrindo modal'); item.imageUrl && setSelectedImage(item.imageUrl); }}
               >
                 {item.itemName}
               </h3>
