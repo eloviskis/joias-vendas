@@ -1119,6 +1119,33 @@ app.get('/message-logs', async () => {
   });
 });
 
+// Download de imagem (sem autenticação para permitir compartilhamento)
+app.get('/download/:filename', async (req: any, reply) => {
+  const { filename } = req.params;
+  
+  // Validar que o arquivo existe e está no diretório de uploads
+  const filepath = path.join(process.cwd(), 'apps', 'api', 'uploads', filename);
+  const normalizedPath = path.normalize(filepath);
+  const uploadsDir = path.normalize(path.join(process.cwd(), 'apps', 'api', 'uploads'));
+  
+  // Validar que o caminho está dentro de uploads (evitar directory traversal)
+  if (!normalizedPath.startsWith(uploadsDir)) {
+    return reply.code(403).send({ error: 'Forbidden' });
+  }
+  
+  if (!fs.existsSync(normalizedPath)) {
+    return reply.code(404).send({ error: 'File not found' });
+  }
+  
+  // Servir com headers de download
+  reply.type('image/jpeg');
+  reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+  reply.header('Cache-Control', 'public, max-age=31536000');
+  
+  const stream = fs.createReadStream(normalizedPath);
+  return reply.send(stream);
+});
+
 // Mostruário (Showcase)
 app.get('/showcase', async (req: any, reply) => {
   // Verificar autenticação

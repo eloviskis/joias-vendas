@@ -288,7 +288,9 @@ function ShareCarneModal({ sale, client, onClose }: Readonly<{ sale: any, client
             {sale.photoUrl && (
               <button
                 onClick={() => {
-                  const photoLink = `${window.location.origin}${sale.photoUrl}`;
+                  const filename = sale.photoUrl.split('/').pop();
+                  const downloadUrl = `/api/download/${filename}`;
+                  
                   const photoMessage = encodeURIComponent(
                     `📸 *Foto da Peça* 📸\n\n` +
                     `💍 *${sale.itemName}*\n` +
@@ -299,7 +301,7 @@ function ShareCarneModal({ sale, client, onClose }: Readonly<{ sale: any, client
                   
                   // Fazer download automático da foto
                   const downloadLink = document.createElement('a');
-                  downloadLink.href = photoLink;
+                  downloadLink.href = downloadUrl;
                   downloadLink.download = `foto-${sale.itemName.replace(/\s+/g, '-')}.jpg`;
                   document.body.appendChild(downloadLink);
                   downloadLink.click();
@@ -2590,7 +2592,6 @@ function MostruarioPage({ token }: { token: string }) {
 
   const shareWhatsApp = (item: any, phone?: string) => {
     const price = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price);
-    const imageLink = item.imageUrl ? `${window.location.origin}${item.imageUrl}` : '';
     
     // Montar mensagem
     let text = `💎 *VANI E ELO JOIAS*\n`;
@@ -2603,12 +2604,16 @@ function MostruarioPage({ token }: { token: string }) {
     
     const encodedText = encodeURIComponent(text);
     
-    // Se tiver imagem, fazer download automático e abrir WhatsApp
-    if (imageLink) {
-      // Fazer download da imagem
+    // Se tiver imagem, fazer download automático via endpoint de download
+    if (item.imageUrl) {
+      // Extrair nome do arquivo do caminho
+      const filename = item.imageUrl.split('/').pop();
+      const downloadUrl = `/api/download/${filename}`;
+      
+      // Fazer download
       const link = document.createElement('a');
-      link.href = imageLink;
-      link.download = `${item.itemName.replace(/\s+/g, '-')}-${item.id}.jpg`;
+      link.href = downloadUrl;
+      link.download = `${item.itemName.replace(/\s+/g, '-')}.jpg`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
