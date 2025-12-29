@@ -2383,8 +2383,6 @@ function MostruarioPage({ token }: { token: string }) {
     }
   };
 
-`;
-`;
   const shareWhatsApp = async (item: any, phone?: string) => {
     console.log('shareWhatsApp chamado para item:', item);
     const price = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price);
@@ -2403,11 +2401,23 @@ function MostruarioPage({ token }: { token: string }) {
 
     const encodedText = encodeURIComponent(text);
 
-    if (phone) {
-      const cleanPhone = phone.replace(/\D/g, '');
-      window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+    const cleanPhone = phone ? phone.replace(/\D/g, '') : '';
+
+    if (isMobile) {
+      // Mobile: usar wa.me para abrir app do WhatsApp
+      if (cleanPhone) {
+        window.location.href = `https://wa.me/55${cleanPhone}?text=${encodedText}`;
+      } else {
+        window.location.href = `https://wa.me/?text=${encodedText}`;
+      }
     } else {
-      window.open(`https://web.whatsapp.com/send?text=${encodedText}`, '_blank');
+      // Desktop: usar WhatsApp Web
+      if (cleanPhone) {
+        window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
+      } else {
+        window.open(`https://web.whatsapp.com/send?text=${encodedText}`, '_blank');
+      }
     }
   };
 
