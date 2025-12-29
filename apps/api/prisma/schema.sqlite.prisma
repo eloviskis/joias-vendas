@@ -43,6 +43,7 @@ model Sale {
   observations  String?
   sellerName    String?
   commission    Float?
+  photoUrl      String?
   installmentsR Installment[]
 }
 
@@ -93,4 +94,19 @@ model SaleDeletion {
   deletedBy    String
   reason       String
   deletedAt    DateTime @default(now())
+}
+
+model Showcase {
+  id          Int      @id @default(autoincrement())
+  itemName    String
+  itemCode    String?
+  factor      Float
+  baseValue   Float?
+  price       Float?
+  description String?
+  originalImageUrl String?
+  imageUrl    String?
+  sold        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

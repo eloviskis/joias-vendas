@@ -314,12 +314,20 @@ app.post('/sales', async (req: any) => {
     data: { clientId, itemName, itemCode, factor, itemType, baseValue, totalValue, paymentMethod, installments, saleDate, observations, sellerName, commission }
   });
   // save image if provided
+  let photoUrl: string | null = null;
   if (imageBase64) {
     const dir = path.join(process.cwd(), 'uploads');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const file = path.join(dir, `${sale.id}.jpg`);
     const data = imageBase64.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
     fs.writeFileSync(file, Buffer.from(data, 'base64'));
+    photoUrl = `/uploads/${sale.id}.jpg`;
+    
+    // Update sale with photoUrl
+    await prisma.sale.update({
+      where: { id: sale.id },
+      data: { photoUrl }
+    });
   }
   // create installments
   const inst = [] as any[];
@@ -1093,7 +1101,8 @@ app.post('/showcase', async (req: any, reply) => {
   }
 
   // Salvar imagem se fornecida
-  let imageUrl = null;
+  let imageUrl: string | null = null;
+  let originalImageUrl: string | null = null;
   if (imageBase64) {
     try {
       const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -1103,10 +1112,17 @@ app.post('/showcase', async (req: any, reply) => {
       
       const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
       const buffer = Buffer.from(base64Data, 'base64');
-      const filename = `showcase-${Date.now()}.jpg`;
+      const ts = Date.now();
+      const origFilename = `showcase-orig-${ts}.jpg`;
+      const filename = `showcase-${ts}.jpg`;
+      const origFilepath = path.join(uploadsDir, origFilename);
       const filepath = path.join(uploadsDir, filename);
       
-      // Processar imagem com Sharp
+      // Salvar original
+      await sharp(buffer).jpeg({ quality: 92 }).toFile(origFilepath);
+      originalImageUrl = `/uploads/${origFilename}`;
+
+      // Processar imagem com Sharp (overlay de preço)
       const image = sharp(buffer);
       const metadata = await image.metadata();
       const width = metadata.width || 800;
@@ -1167,7 +1183,8 @@ app.post('/showcase', async (req: any, reply) => {
         baseValue: finalBaseValue ? Number(finalBaseValue) : null,
         price: finalPrice ? Number(finalPrice) : null,
         description: description || null,
-        imageUrl
+        imageUrl,
+        originalImageUrl
       }
     });
 
@@ -1205,6 +1222,144 @@ app.delete('/showcase/:id', async (req: any, reply) => {
   return { success: true };
 });
 
+// Atualizar item do mostruário (campos e/ou imagem)
+app.patch('/showcase/:id', async (req: any, reply) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return reply.code(401).send({ error: 'Unauthorized' });
+
+  const id = Number.parseInt(req.params.id);
+  const { name, itemName, itemCode, factor, weight, baseValue, price, description, imageBase64, sold } = req.body || {};
+
+  const item = await prisma.showcase.findUnique({ where: { id } });
+  if (!item) return reply.code(404).send({ error: 'Not found' });
+
+  const finalItemName = name || itemName || item.itemName;
+  const finalBaseValue = (weight ?? baseValue ?? item.baseValue) as number | null;
+  const finalFactor = (factor ?? item.factor) as number;
+  let computedPrice: number | null = null;
+  if (price ?? false) {
+    computedPrice = Number(price);
+  } else if (finalFactor && finalBaseValue) {
+    computedPrice = Number(finalFactor) * Number(finalBaseValue);
+  } else {
+    computedPrice = (item.price as number | null) ?? null;
+  }
+  const finalPrice = computedPrice;
+  let newImageUrl = item.imageUrl || null;
+  let newOriginalUrl = item.originalImageUrl || null;
+
+  // Se veio nova imagem, processa e substitui
+  if (imageBase64) {
+    try {
+      const uploadsDir = path.join(process.cwd(), 'uploads');
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+      const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+      const ts = Date.now();
+      const origFilename = `showcase-orig-${ts}.jpg`;
+      const filename = `showcase-${ts}.jpg`;
+      const origFilepath = path.join(uploadsDir, origFilename);
+      const filepath = path.join(uploadsDir, filename);
+
+      // Salvar novo original
+      await sharp(buffer).jpeg({ quality: 92 }).toFile(origFilepath);
+      newOriginalUrl = `/uploads/${origFilename}`;
+
+      const image = sharp(buffer);
+      const metadata = await image.metadata();
+      const width = metadata.width || 800;
+      const height = metadata.height || 600;
+      const bannerHeight = Math.max(60, Math.floor(height * 0.15));
+      const fontSize = Math.floor(bannerHeight * 0.5);
+      const priceText = finalPrice ? `R$ ${finalPrice.toFixed(2).replace('.', ',')}` : 'Consulte o preço';
+      const svgBanner = `
+        <svg width="${width}" height="${bannerHeight}">
+          <rect width="${width}" height="${bannerHeight}" fill="#1a1a1a" opacity="0.85"/>
+          <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="bold" fill="#FFD700" stroke="#000" stroke-width="2" paint-order="stroke">${priceText}</text>
+        </svg>
+      `;
+
+      await image
+        .resize(width, height, { fit: 'cover' })
+        .composite([{ input: Buffer.from(svgBanner), gravity: 'south' }])
+        .jpeg({ quality: 90 })
+        .toFile(filepath);
+
+      // Remove a imagem anterior se existir
+      if (item.imageUrl) {
+        try {
+          const oldPath = path.join(process.cwd(), item.imageUrl.replace(/^\//, ''));
+          if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        } catch (e) {
+          app.log.warn({ err: e }, 'Failed to delete old showcase image');
+        }
+      }
+      if (item.originalImageUrl) {
+        try {
+          const oldOrig = path.join(process.cwd(), item.originalImageUrl.replace(/^\//, ''));
+          if (fs.existsSync(oldOrig)) fs.unlinkSync(oldOrig);
+        } catch (e) {
+          app.log.warn({ err: e }, 'Failed to delete old original showcase image');
+        }
+      }
+
+      newImageUrl = `/uploads/${filename}`;
+    } catch (error) {
+      console.error('Error updating image:', error);
+      return reply.code(500).send({ error: 'Error updating image', details: (error as any)?.message });
+    }
+  }
+
+  const updated = await prisma.showcase.update({
+    where: { id },
+    data: {
+      itemName: finalItemName,
+      itemCode: itemCode ?? item.itemCode,
+      factor: Number(finalFactor),
+      baseValue: finalBaseValue ?? null,
+      price: finalPrice ?? null,
+      description: description ?? item.description,
+      imageUrl: newImageUrl,
+      originalImageUrl: newOriginalUrl,
+      sold: (sold ?? item.sold) as boolean
+    }
+  });
+
+  return updated;
+});
+
+// Remover apenas a imagem do item
+app.delete('/showcase/:id/image', async (req: any, reply) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return reply.code(401).send({ error: 'Unauthorized' });
+
+  const id = Number.parseInt(req.params.id);
+  const item = await prisma.showcase.findUnique({ where: { id } });
+  if (!item) return reply.code(404).send({ error: 'Not found' });
+
+  if (item.imageUrl) {
+    try {
+      const filepath = path.join(process.cwd(), item.imageUrl.replace(/^\//, ''));
+      if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+    } catch (error) {
+      console.error('Error deleting image:', error);
+    }
+  }
+  if (item.originalImageUrl) {
+    try {
+      const filepath = path.join(process.cwd(), item.originalImageUrl.replace(/^\//, ''));
+      if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+    } catch (error) {
+      console.error('Error deleting original image:', error);
+    }
+  }
+
+  await prisma.showcase.update({ where: { id }, data: { imageUrl: null, originalImageUrl: null } });
+  return { success: true };
+});
+
+// Enviar item do mostruário via WhatsApp (com imagem e valor final na faixa)
 app.get('/health', async () => ({ ok: true }));
 
 app.listen({ port: Number(process.env.PORT) || 3000, host: process.env.HOST || '0.0.0.0' }).catch((err) => {

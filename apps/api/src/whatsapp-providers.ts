@@ -12,7 +12,7 @@ export interface WhatsAppProvider {
 
 export class MockProvider implements WhatsAppProvider {
   async send(msg: WhatsAppMessage) {
-    console.log('[Mock WhatsApp]', { to: msg.to, body: msg.body.substring(0, 50) });
+    console.log('[Mock WhatsApp]', { to: msg.to, body: msg.body.substring(0, 50), mediaUrl: msg.mediaUrl });
   }
 }
 
@@ -69,7 +69,7 @@ export class MetaProvider implements WhatsAppProvider {
 
     if (msg.mediaUrl) {
       payload.type = 'image';
-      payload.image = { link: msg.mediaUrl };
+      payload.image = { link: msg.mediaUrl, caption: msg.body };
       delete payload.text;
     }
 

@@ -282,8 +282,32 @@ function ShareCarneModal({ sale, client, onClose }: Readonly<{ sale: any, client
               className="w-full bg-green-500 hover:bg-green-600 text-white p-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition"
             >
               <span className="text-xl">📱</span>
-              Enviar via WhatsApp
+              Enviar Carnê via WhatsApp
             </button>
+
+            {sale.photoUrl && (
+              <button
+                onClick={() => {
+                  const photoLink = `${window.location.origin}${sale.photoUrl}`;
+                  const photoMessage = encodeURIComponent(
+                    `📸 *Foto da Peça* 📸\n\n` +
+                    `💍 *${sale.itemName}*\n` +
+                    `${sale.itemCode ? `📦 Código: ${sale.itemCode}\n` : ''}` +
+                    `💰 Valor: *${formatCurrency(sale.totalValue)}*\n\n` +
+                    `Clique no link abaixo para visualizar a foto:\n` +
+                    `${photoLink}\n\n` +
+                    `Verifique acima o carnê com as parcelas! 💎`
+                  );
+                  const phone = client.phone.replaceAll(/\D/g, '');
+                  const url = `https://wa.me/55${phone}?text=${photoMessage}`;
+                  window.open(url, '_blank');
+                }}
+                className="w-full bg-cyan-500 hover:bg-cyan-600 text-white p-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition"
+              >
+                <span className="text-xl">📸</span>
+                Enviar Foto + Carnê
+              </button>
+            )}
 
             <button
               onClick={copyToClipboard}
@@ -2258,6 +2282,7 @@ function MostruarioPage({ token }: { token: string }) {
   const [items, setItems] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [showImageEditor, setShowImageEditor] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [photo, setPhoto] = useState('');
   const [itemName, setItemName] = useState('');
   const [itemCode, setItemCode] = useState('');
@@ -2349,9 +2374,77 @@ function MostruarioPage({ token }: { token: string }) {
     }
   };
 
+  const handleToggleSold = async (id: number, sold: boolean) => {
+    try {
+      const res = await fetch(`/api/showcase/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ sold: !sold })
+      });
+      if (res.ok) {
+        loadItems();
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar status:', error);
+    }
+  };
+
+  const handleChangeImage = (id: number) => {
+    setEditingItemId(id);
+    setShowImageEditor(true);
+  };
+
+  const handleSaveEditedImage = async (base64: string) => {
+    if (!editingItemId) return;
+    try {
+      // Encontrar item para recalcular preço (usar server também recalcula se necessário)
+      const item = items.find((it) => it.id === editingItemId);
+      const body: any = {
+        imageBase64: base64,
+        factor: item?.factor,
+        baseValue: item?.baseValue,
+        price: item?.price
+      };
+      const res = await fetch(`/api/showcase/${editingItemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body)
+      });
+      if (res.ok) {
+        setEditingItemId(null);
+        setShowImageEditor(false);
+        loadItems();
+      } else {
+        alert('Erro ao atualizar imagem');
+      }
+    } catch (error) {
+      alert('Erro: ' + error);
+    }
+  };
+
+  const handleDeleteImage = async (id: number) => {
+    if (!confirm('Remover apenas a imagem desta peça?')) return;
+    try {
+      const res = await fetch(`/api/showcase/${id}/image`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        loadItems();
+      }
+    } catch (error) {
+      console.error('Erro ao remover imagem:', error);
+    }
+  };
+
   const shareWhatsApp = (item: any, phone?: string) => {
     const price = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price);
-    let text = `💎 *VANI E ELO JOIAS*\n`;
+    const imageLink = item.imageUrl ? `${window.location.origin}${item.imageUrl}` : '';
+    let text = '';
+    if (imageLink) {
+      text += `${imageLink}\n\n`;
+    }
+    text += `💎 *VANI E ELO JOIAS*\n`;
     text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
     text += `*${item.itemName}*\n`;
     if (item.itemCode) text += `📦 Código: ${item.itemCode}\n`;
@@ -2377,8 +2470,10 @@ function MostruarioPage({ token }: { token: string }) {
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  const formatCurrency = (value: any) => {
+    const num = typeof value === 'number' ? value : parseFloat(value || '0');
+    if (isNaN(num)) return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(0);
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
   };
 
   return (
@@ -2543,10 +2638,19 @@ function MostruarioPage({ token }: { token: string }) {
           <h3 className="text-xl font-bold text-gray-800 mb-4">✂️ Editar Imagem</h3>
           <ImageEditor
             onImageReady={(base64) => {
-              setPhoto(base64);
+              if (editingItemId) {
+                // Edição de imagem de item existente
+                handleSaveEditedImage(base64);
+              } else {
+                // Nova peça
+                setPhoto(base64);
+                setShowImageEditor(false);
+              }
+            }}
+            onCancel={() => {
+              setEditingItemId(null);
               setShowImageEditor(false);
             }}
-            onCancel={() => setShowImageEditor(false)}
           />
         </div>
       )}
@@ -2554,7 +2658,7 @@ function MostruarioPage({ token }: { token: string }) {
       {/* Grid de Itens */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {items.map((item) => (
-          <div key={item.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition">
+          <div key={item.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition relative">
             {/* Imagem */}
             {item.imageUrl && (
               <div className="relative h-64 bg-gray-100">
@@ -2563,6 +2667,11 @@ function MostruarioPage({ token }: { token: string }) {
                   alt={item.itemName}
                   className="w-full h-full object-cover"
                 />
+                {item.sold && (
+                  <div className="absolute top-3 left-3 bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold shadow">
+                    VENDIDA
+                  </div>
+                )}
               </div>
             )}
             
@@ -2577,8 +2686,12 @@ function MostruarioPage({ token }: { token: string }) {
               )}
               
               <div className="bg-green-50 p-3 rounded-lg mb-3">
-                <p className="text-xs text-gray-600">Fator: {item.factor} × Base: {formatCurrency(item.baseValue)}</p>
-                <p className="text-xl font-bold text-green-600 mt-1">{formatCurrency(item.price)}</p>
+                {(item.factor && item.baseValue) && (
+                  <p className="text-xs text-gray-600">Fator: {item.factor} × Base: {formatCurrency(item.baseValue)}</p>
+                )}
+                {item.price != null && (
+                  <p className="text-xl font-bold text-green-600 mt-1">{formatCurrency(item.price)}</p>
+                )}
               </div>
 
               {/* Botões de Ação */}
@@ -2596,6 +2709,32 @@ function MostruarioPage({ token }: { token: string }) {
                   <span>👤</span> Enviar para
                 </button>
               </div>
+
+              {/* Controles de Imagem */}
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => handleChangeImage(item.id)}
+                  className="flex-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 py-2 rounded-lg text-sm font-semibold transition"
+                >
+                  ✏️ Trocar Foto
+                </button>
+                {item.imageUrl && (
+                  <button
+                    onClick={() => handleDeleteImage(item.id)}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg text-sm font-semibold transition"
+                  >
+                    🗂️ Remover Foto
+                  </button>
+                )}
+              </div>
+
+              {/* Vender/Disponibilizar */}
+              <button
+                onClick={() => handleToggleSold(item.id, item.sold)}
+                className={`w-full mt-2 ${item.sold ? 'bg-red-600 hover:bg-red-700' : 'bg-purple-600 hover:bg-purple-700'} text-white py-2 rounded-lg text-sm font-semibold transition`}
+              >
+                {item.sold ? '↩️ Marcar como Disponível' : '✅ Marcar como Vendida'}
+              </button>
               
               <button
                 onClick={() => handleDelete(item.id)}

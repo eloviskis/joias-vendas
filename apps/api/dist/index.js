@@ -1,19 +1,33 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import cron from 'node-cron';
 import fs from 'node:fs';
 import path from 'node:path';
+import sharp from 'sharp';
+import { fileURLToPath } from 'node:url';
 import nodemailer from 'nodemailer';
 import { createProvider } from './whatsapp-providers.js';
 import { generateCardText } from './card-generator.js';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const app = Fastify({ logger: true });
 app.register(cors, { origin: true });
 app.register(multipart);
-const prisma = new PrismaClient();
+// Servir arquivos estáticos (uploads)
+app.register(fastifyStatic, {
+    root: path.join(__dirname, '..', 'uploads'),
+    prefix: '/uploads/',
+    decorateReply: false
+});
+// Allow overriding the database URL to support desktop (SQLite) or server (Postgres)
+const prisma = process.env.DATABASE_URL
+    ? new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } })
+    : new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev';
 // WhatsApp provider (dinâmico via settings)
 let provider = createProvider('mock', {});
@@ -157,7 +171,8 @@ app.delete('/users/:id', async (req, reply) => {
 // Simple auth hook (optional)
 app.addHook('preHandler', async (req, reply) => {
     const path = req.url || req.routerPath || '';
-    if (path.startsWith('/auth'))
+    // Permitir acesso sem autenticação para /auth e /uploads
+    if (path.startsWith('/auth') || path.startsWith('/uploads'))
         return;
     const auth = req.headers.authorization;
     if (!auth?.startsWith('Bearer '))
@@ -210,6 +225,17 @@ app.put('/clients/:id', async (req) => {
         }
     });
 });
+// Deletar todos os clientes
+app.delete('/clients/delete-all', async (req, reply) => {
+    try {
+        const count = await prisma.client.count();
+        await prisma.client.deleteMany({});
+        return { success: true, deleted: count };
+    }
+    catch (error) {
+        return reply.code(500).send({ error: error.message || 'Erro ao deletar clientes' });
+    }
+});
 app.get('/clients/:id/sales', async (req) => {
     const id = Number(req.params.id);
     return prisma.sale.findMany({
@@ -223,6 +249,43 @@ app.get('/sales', async () => {
         include: { client: true, installmentsR: true },
         orderBy: { saleDate: 'desc' }
     });
+});
+app.delete('/sales/:id', async (req, reply) => {
+    const id = Number(req.params.id);
+    const { reason, deletedBy } = req.body || {};
+    if (!reason || !reason.trim()) {
+        return reply.code(400).send({ error: 'Motivo é obrigatório' });
+    }
+    try {
+        // Buscar dados da venda antes de deletar
+        const sale = await prisma.sale.findUnique({
+            where: { id },
+            include: { client: true }
+        });
+        if (!sale) {
+            return reply.code(404).send({ error: 'Venda não encontrada' });
+        }
+        // Registrar exclusão
+        await prisma.saleDeletion.create({
+            data: {
+                saleId: id,
+                clientName: sale.client.name,
+                itemName: sale.itemName,
+                totalValue: sale.totalValue,
+                saleDate: sale.saleDate,
+                deletedBy: deletedBy || 'Usuário',
+                reason: reason.trim()
+            }
+        });
+        // Deletar parcelas primeiro (cascade)
+        await prisma.installment.deleteMany({ where: { saleId: id } });
+        // Deletar venda
+        await prisma.sale.delete({ where: { id } });
+        return { success: true, message: 'Venda excluída com sucesso' };
+    }
+    catch (error) {
+        return reply.code(500).send({ error: error.message || 'Erro ao excluir venda' });
+    }
 });
 app.post('/sales', async (req) => {
     const { clientId, itemName, itemCode, factor, itemType, baseValue, totalValue, paymentMethod, installments, roundUpInstallments, customInstallmentValues, saleDate, observations, sellerName, commission, imageBase64, sendCard } = req.body;
@@ -908,8 +971,281 @@ app.get('/message-logs', async () => {
         take: 50
     });
 });
+// Mostruário (Showcase)
+app.get('/showcase', async (req) => {
+    // Verificar autenticação
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+        return { error: 'Unauthorized' };
+    }
+    return prisma.showcase.findMany({
+        orderBy: { createdAt: 'desc' }
+    });
+});
+app.post('/showcase', async (req, reply) => {
+    // Verificar autenticação
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+    }
+    const { name, itemName, itemCode, factor, weight, baseValue, price, description, imageBase64 } = req.body || {};
+    // Aceitar 'name' ou 'itemName'
+    const finalItemName = name || itemName;
+    // Aceitar 'weight' ou 'baseValue'
+    const finalBaseValue = weight || baseValue;
+    // Se não tiver price, calcular baseado no factor e baseValue
+    const finalPrice = price || (factor && finalBaseValue ? factor * finalBaseValue : null);
+    if (!finalItemName || !factor) {
+        return reply.code(400).send({ error: 'Missing required fields: name and factor are required' });
+    }
+    // Salvar imagem se fornecida
+    let imageUrl = null;
+    let originalImageUrl = null;
+    if (imageBase64) {
+        try {
+            const uploadsDir = path.join(process.cwd(), 'uploads');
+            if (!fs.existsSync(uploadsDir)) {
+                fs.mkdirSync(uploadsDir, { recursive: true });
+            }
+            const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
+            const buffer = Buffer.from(base64Data, 'base64');
+            const ts = Date.now();
+            const origFilename = `showcase-orig-${ts}.jpg`;
+            const filename = `showcase-${ts}.jpg`;
+            const origFilepath = path.join(uploadsDir, origFilename);
+            const filepath = path.join(uploadsDir, filename);
+            // Salvar original
+            await sharp(buffer).jpeg({ quality: 92 }).toFile(origFilepath);
+            originalImageUrl = `/uploads/${origFilename}`;
+            // Processar imagem com Sharp (overlay de preço)
+            const image = sharp(buffer);
+            const metadata = await image.metadata();
+            const width = metadata.width || 800;
+            const height = metadata.height || 600;
+            // Altura da faixa de preço (15% da altura da imagem, mínimo 60px)
+            const bannerHeight = Math.max(60, Math.floor(height * 0.15));
+            const fontSize = Math.floor(bannerHeight * 0.5); // 50% da altura da faixa
+            // Formatar o preço
+            const priceText = finalPrice
+                ? `R$ ${finalPrice.toFixed(2).replace('.', ',')}`
+                : 'Consulte o preço';
+            // Criar SVG com faixa de preço
+            const svgBanner = `
+        <svg width="${width}" height="${bannerHeight}">
+          <rect width="${width}" height="${bannerHeight}" fill="#1a1a1a" opacity="0.85"/>
+          <text
+            x="50%"
+            y="50%"
+            text-anchor="middle"
+            dominant-baseline="middle"
+            font-family="Arial, sans-serif"
+            font-size="${fontSize}"
+            font-weight="bold"
+            fill="#FFD700"
+            stroke="#000"
+            stroke-width="2"
+            paint-order="stroke"
+          >${priceText}</text>
+        </svg>
+      `;
+            // Compor imagem original com faixa de preço
+            await image
+                .resize(width, height, { fit: 'cover' })
+                .composite([{
+                    input: Buffer.from(svgBanner),
+                    gravity: 'south'
+                }])
+                .jpeg({ quality: 90 })
+                .toFile(filepath);
+            imageUrl = `/uploads/${filename}`;
+        }
+        catch (error) {
+            console.error('Error saving image:', error);
+            return reply.code(500).send({ error: 'Error saving image', details: error });
+        }
+    }
+    try {
+        const item = await prisma.showcase.create({
+            data: {
+                itemName: finalItemName,
+                itemCode: itemCode || null,
+                factor: Number(factor),
+                baseValue: finalBaseValue ? Number(finalBaseValue) : null,
+                price: finalPrice ? Number(finalPrice) : null,
+                description: description || null,
+                imageUrl,
+                originalImageUrl
+            }
+        });
+        return item;
+    }
+    catch (error) {
+        console.error('Error creating showcase item:', error);
+        return reply.code(500).send({ error: 'Error creating item', details: error.message });
+    }
+});
+app.delete('/showcase/:id', async (req, reply) => {
+    // Verificar autenticação
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+    }
+    const id = parseInt(req.params.id);
+    // Buscar item para deletar a imagem
+    const item = await prisma.showcase.findUnique({ where: { id } });
+    if (item?.imageUrl) {
+        try {
+            const filepath = path.join(process.cwd(), item.imageUrl.replace(/^\//, ''));
+            if (fs.existsSync(filepath)) {
+                fs.unlinkSync(filepath);
+            }
+        }
+        catch (error) {
+            console.error('Error deleting image:', error);
+        }
+    }
+    await prisma.showcase.delete({ where: { id } });
+    return { success: true };
+});
+// Atualizar item do mostruário (campos e/ou imagem)
+app.patch('/showcase/:id', async (req, reply) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader)
+        return reply.code(401).send({ error: 'Unauthorized' });
+    const id = Number.parseInt(req.params.id);
+    const { name, itemName, itemCode, factor, weight, baseValue, price, description, imageBase64, sold } = req.body || {};
+    const item = await prisma.showcase.findUnique({ where: { id } });
+    if (!item)
+        return reply.code(404).send({ error: 'Not found' });
+    const finalItemName = name || itemName || item.itemName;
+    const finalBaseValue = (weight ?? baseValue ?? item.baseValue);
+    const finalFactor = (factor ?? item.factor);
+    let computedPrice = null;
+    if (price ?? false) {
+        computedPrice = Number(price);
+    }
+    else if (finalFactor && finalBaseValue) {
+        computedPrice = Number(finalFactor) * Number(finalBaseValue);
+    }
+    else {
+        computedPrice = item.price ?? null;
+    }
+    const finalPrice = computedPrice;
+    let newImageUrl = item.imageUrl || null;
+    let newOriginalUrl = item.originalImageUrl || null;
+    // Se veio nova imagem, processa e substitui
+    if (imageBase64) {
+        try {
+            const uploadsDir = path.join(process.cwd(), 'uploads');
+            if (!fs.existsSync(uploadsDir))
+                fs.mkdirSync(uploadsDir, { recursive: true });
+            const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
+            const buffer = Buffer.from(base64Data, 'base64');
+            const ts = Date.now();
+            const origFilename = `showcase-orig-${ts}.jpg`;
+            const filename = `showcase-${ts}.jpg`;
+            const origFilepath = path.join(uploadsDir, origFilename);
+            const filepath = path.join(uploadsDir, filename);
+            // Salvar novo original
+            await sharp(buffer).jpeg({ quality: 92 }).toFile(origFilepath);
+            newOriginalUrl = `/uploads/${origFilename}`;
+            const image = sharp(buffer);
+            const metadata = await image.metadata();
+            const width = metadata.width || 800;
+            const height = metadata.height || 600;
+            const bannerHeight = Math.max(60, Math.floor(height * 0.15));
+            const fontSize = Math.floor(bannerHeight * 0.5);
+            const priceText = finalPrice ? `R$ ${finalPrice.toFixed(2).replace('.', ',')}` : 'Consulte o preço';
+            const svgBanner = `
+        <svg width="${width}" height="${bannerHeight}">
+          <rect width="${width}" height="${bannerHeight}" fill="#1a1a1a" opacity="0.85"/>
+          <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="bold" fill="#FFD700" stroke="#000" stroke-width="2" paint-order="stroke">${priceText}</text>
+        </svg>
+      `;
+            await image
+                .resize(width, height, { fit: 'cover' })
+                .composite([{ input: Buffer.from(svgBanner), gravity: 'south' }])
+                .jpeg({ quality: 90 })
+                .toFile(filepath);
+            // Remove a imagem anterior se existir
+            if (item.imageUrl) {
+                try {
+                    const oldPath = path.join(process.cwd(), item.imageUrl.replace(/^\//, ''));
+                    if (fs.existsSync(oldPath))
+                        fs.unlinkSync(oldPath);
+                }
+                catch (e) {
+                    app.log.warn({ err: e }, 'Failed to delete old showcase image');
+                }
+            }
+            if (item.originalImageUrl) {
+                try {
+                    const oldOrig = path.join(process.cwd(), item.originalImageUrl.replace(/^\//, ''));
+                    if (fs.existsSync(oldOrig))
+                        fs.unlinkSync(oldOrig);
+                }
+                catch (e) {
+                    app.log.warn({ err: e }, 'Failed to delete old original showcase image');
+                }
+            }
+            newImageUrl = `/uploads/${filename}`;
+        }
+        catch (error) {
+            console.error('Error updating image:', error);
+            return reply.code(500).send({ error: 'Error updating image', details: error?.message });
+        }
+    }
+    const updated = await prisma.showcase.update({
+        where: { id },
+        data: {
+            itemName: finalItemName,
+            itemCode: itemCode ?? item.itemCode,
+            factor: Number(finalFactor),
+            baseValue: finalBaseValue ?? null,
+            price: finalPrice ?? null,
+            description: description ?? item.description,
+            imageUrl: newImageUrl,
+            originalImageUrl: newOriginalUrl,
+            sold: (sold ?? item.sold)
+        }
+    });
+    return updated;
+});
+// Remover apenas a imagem do item
+app.delete('/showcase/:id/image', async (req, reply) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader)
+        return reply.code(401).send({ error: 'Unauthorized' });
+    const id = Number.parseInt(req.params.id);
+    const item = await prisma.showcase.findUnique({ where: { id } });
+    if (!item)
+        return reply.code(404).send({ error: 'Not found' });
+    if (item.imageUrl) {
+        try {
+            const filepath = path.join(process.cwd(), item.imageUrl.replace(/^\//, ''));
+            if (fs.existsSync(filepath))
+                fs.unlinkSync(filepath);
+        }
+        catch (error) {
+            console.error('Error deleting image:', error);
+        }
+    }
+    if (item.originalImageUrl) {
+        try {
+            const filepath = path.join(process.cwd(), item.originalImageUrl.replace(/^\//, ''));
+            if (fs.existsSync(filepath))
+                fs.unlinkSync(filepath);
+        }
+        catch (error) {
+            console.error('Error deleting original image:', error);
+        }
+    }
+    await prisma.showcase.update({ where: { id }, data: { imageUrl: null, originalImageUrl: null } });
+    return { success: true };
+});
+// Enviar item do mostruário via WhatsApp (com imagem e valor final na faixa)
 app.get('/health', async () => ({ ok: true }));
-app.listen({ port: 3000, host: '0.0.0.0' }).catch((err) => {
+app.listen({ port: Number(process.env.PORT) || 3000, host: process.env.HOST || '0.0.0.0' }).catch((err) => {
     app.log.error(err);
     process.exit(1);
 });

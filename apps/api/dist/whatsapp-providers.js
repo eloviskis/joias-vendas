@@ -1,7 +1,7 @@
 import axios from 'axios';
 export class MockProvider {
     async send(msg) {
-        console.log('[Mock WhatsApp]', { to: msg.to, body: msg.body.substring(0, 50) });
+        console.log('[Mock WhatsApp]', { to: msg.to, body: msg.body.substring(0, 50), mediaUrl: msg.mediaUrl });
     }
 }
 export class TwilioProvider {
@@ -48,7 +48,7 @@ export class MetaProvider {
         };
         if (msg.mediaUrl) {
             payload.type = 'image';
-            payload.image = { link: msg.mediaUrl };
+            payload.image = { link: msg.mediaUrl, caption: msg.body };
             delete payload.text;
         }
         await axios.post(url, payload, {
