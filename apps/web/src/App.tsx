@@ -2623,10 +2623,10 @@ function MostruarioPage({ token }: { token: string }) {
     
     const encodedText = encodeURIComponent(text);
     
-    // Se tiver imagem, tentar usar Web Share API com arquivo (envia a foto, não o link)
+    // Se tiver imagem, tentar fluxos em ordem: Web Share (mobile), Clipboard (desktop), fallback download+link
     if (item.imageUrl) {
       try {
-        console.log('Tentando Web Share API...');
+        console.log('Preparando imagem para compartilhar...');
         const filename = item.imageUrl.split('/').pop();
         const downloadUrl = `/api/download/${filename}`;
         console.log('Baixando de:', downloadUrl);
@@ -2634,23 +2634,40 @@ function MostruarioPage({ token }: { token: string }) {
         const blob = await res.blob();
         console.log('Blob recebido:', blob.type, blob.size);
         const shareFile = new File([blob], `${item.itemName.replace(/\s+/g, '-')}.jpg`, { type: 'image/jpeg' });
-        
+
+        // 1) Mobile: Web Share API com arquivo
         if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
           console.log('Compartilhando via Web Share API');
-          await navigator.share({
-            files: [shareFile],
-            text
-          });
+          await navigator.share({ files: [shareFile], text });
           return;
-        } else {
-          console.log('Web Share API não suportado ou não pode compartilhar arquivos');
         }
+
+        // 2) Desktop: copiar imagem para a área de transferência e abrir WhatsApp Web
+        if (navigator.clipboard && 'write' in navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+          try {
+            await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+            console.log('Imagem copiada para a área de transferência');
+            // Abrir WhatsApp Web com o texto; usuário só cola (Ctrl+V) a imagem
+            if (phone) {
+              const cleanPhone = phone.replace(/\D/g, '');
+              window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
+            } else {
+              window.open(`https://web.whatsapp.com/send?text=${encodedText}`, '_blank');
+            }
+            alert('Imagem copiada! Cole (Ctrl+V) no chat do WhatsApp Web.');
+            return;
+          } catch (err) {
+            console.warn('Falhou ao copiar imagem para clipboard, usando fallback:', err);
+          }
+        }
+
+        console.log('Nenhuma API de compartilhamento disponível, seguindo para fallback');
       } catch (err) {
-        console.warn('Web Share API falhou, usando fallback:', err);
+        console.warn('Erro preparando imagem; usando fallback de download:', err);
       }
 
-      // Fallback: baixar e abrir WhatsApp com texto
-      console.log('Usando fallback: download + WhatsApp link');
+      // 3) Fallback: baixar e abrir WhatsApp com texto
+      console.log('Fallback: download + WhatsApp link');
       const filename = item.imageUrl.split('/').pop();
       const downloadUrl = `/api/download/${filename}`;
       const link = document.createElement('a');
