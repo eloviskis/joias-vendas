@@ -2623,83 +2623,33 @@ function MostruarioPage({ token }: { token: string }) {
     
     const encodedText = encodeURIComponent(text);
     
-    // Se tiver imagem, tentar fluxos em ordem: Web Share (mobile), Clipboard (desktop), fallback opcional
+    // Se tiver imagem
     if (item.imageUrl) {
-      try {
-        console.log('Preparando imagem para compartilhar...');
-        const filename = item.imageUrl.split('/').pop();
-        const downloadUrl = `/api/download/${filename}`;
-        console.log('Baixando de:', downloadUrl);
-        const res = await fetch(downloadUrl);
-        const blob = await res.blob();
-        console.log('Blob recebido:', blob.type, blob.size);
-        const shareFile = new File([blob], `${item.itemName.replace(/\s+/g, '-')}.jpg`, { type: 'image/jpeg' });
-
-        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-        // 1) Mobile: Web Share API com arquivo
-        if (isMobile && navigator.canShare && navigator.canShare({ files: [shareFile] })) {
-          console.log('Compartilhando via Web Share API (mobile)');
-          await navigator.share({ files: [shareFile], text });
-          return;
-        }
-
-        // 2) Desktop: copiar imagem para a área de transferência e abrir WhatsApp Web
-        if (navigator.clipboard && 'write' in navigator.clipboard && typeof ClipboardItem !== 'undefined') {
-          try {
-            // Solicita permissão se aplicável
-            if (navigator.permissions && 'query' in navigator.permissions) {
-              try {
-                const perm = await navigator.permissions.query({ name: 'clipboard-write' as PermissionName });
-                console.log('Permissão clipboard-write:', perm.state);
-              } catch (permErr) {
-                console.warn('Não foi possível consultar permissão clipboard-write:', permErr);
-              }
-            }
-
-            // Copia imagem (e texto como alternativa) para o clipboard
-            const clipboardItem = new ClipboardItem({
-              [blob.type]: blob,
-              'text/plain': new Blob([text], { type: 'text/plain' })
-            });
-
-            await navigator.clipboard.write([clipboardItem]);
-            console.log('Imagem copiada para a área de transferência');
-
-            // Abrir WhatsApp Web com o texto já preenchido
-            if (phone) {
-              const cleanPhone = phone.replace(/\D/g, '');
-              window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
-            } else {
-              window.open(`https://web.whatsapp.com/send?text=${encodedText}`, '_blank');
-            }
-            alert('Imagem copiada! Cole (Ctrl+V) no chat do WhatsApp Web.');
+      // Detectar se é móbile
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        // Mobile: tentar Web Share API com arquivo
+        try {
+          console.log('Tentando Web Share API (mobile)...');
+          const filename = item.imageUrl.split('/').pop();
+          const downloadUrl = `/api/download/${filename}`;
+          const res = await fetch(downloadUrl);
+          const blob = await res.blob();
+          const shareFile = new File([blob], `${item.itemName.replace(/\s+/g, '-')}.jpg`, { type: 'image/jpeg' });
+          
+          if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
+            console.log('Compartilhando via Web Share API');
+            await navigator.share({ files: [shareFile], text });
             return;
-          } catch (err) {
-            console.warn('Falhou ao copiar imagem para clipboard:', err);
-            alert('Não consegui copiar a imagem automaticamente. Vou abrir o WhatsApp Web com o texto; se preferir, confirme para baixar a imagem e anexar manualmente.');
           }
+        } catch (err) {
+          console.warn('Web Share API falhou:', err);
         }
-
-        console.log('Nenhuma API de compartilhamento disponível, seguindo para fallback');
-      } catch (err) {
-        console.warn('Erro preparando imagem; usando fallback de download:', err);
-      }
-
-      // 3) Fallback: download opcional + link WhatsApp (texto garantido via URL)
-      console.log('Fallback: download + WhatsApp link');
-      const wantDownload = confirm('Quer baixar a imagem para anexar manualmente no WhatsApp Web?');
-      if (wantDownload) {
-        const filename = item.imageUrl.split('/').pop();
-        const downloadUrl = `/api/download/${filename}`;
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = `${item.itemName.replace(/\s+/g, '-')}.jpg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
       }
       
+      // Desktop ou fallback: abrir WhatsApp Web com o texto; usuário anexa a imagem manualmente
+      console.log('Abrindo WhatsApp Web com texto');
       if (phone) {
         const cleanPhone = phone.replace(/\D/g, '');
         window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
@@ -2972,6 +2922,25 @@ function MostruarioPage({ token }: { token: string }) {
                   <span>👤</span> Enviar para
                 </button>
               </div>
+
+              {/* Botão para Baixar Imagem */}
+              {item.imageUrl && (
+                <button
+                  onClick={() => {
+                    const filename = item.imageUrl.split('/').pop();
+                    const downloadUrl = `/api/download/${filename}`;
+                    const link = document.createElement('a');
+                    link.href = downloadUrl;
+                    link.download = `${item.itemName.replace(/\s+/g, '-')}.jpg`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="w-full mt-2 bg-yellow-500 hover:bg-yellow-600 text-white py-2 rounded-lg text-sm font-semibold transition"
+                >
+                  ⬇️ Baixar Imagem
+                </button>
+              )}
 
               {/* Botão de Editar */}
               <button
