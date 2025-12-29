@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import nodemailer from 'nodemailer';
 import { createProvider, WhatsAppProvider } from './whatsapp-providers.js';
 import { generateCardText, CardData } from './card-generator.js';
+import { createCanvas } from '@napi-rs/canvas';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1215,72 +1216,54 @@ app.post('/showcase', async (req: any, reply) => {
       await sharp(buffer).jpeg({ quality: 92 }).toFile(origFilepath);
       originalImageUrl = `/uploads/${origFilename}`;
 
-      // Processar imagem com Sharp (overlay de preço)
-      const image = sharp(buffer);
-      const metadata = await image.metadata();
+      // Processar imagem com Sharp + Canvas para adicionar faixa de preço
+      const metadata = await sharp(buffer).metadata();
       const width = metadata.width || 800;
       const height = metadata.height || 600;
       
-      // Altura da faixa de preço (15% da altura da imagem, mínimo 60px)
-      const bannerHeight = Math.max(60, Math.floor(height * 0.15));
-      const fontSize = Math.floor(bannerHeight * 0.55); // Tamanho da fonte
+      // Altura da faixa de preço (15% da altura da imagem, mínimo 80px)
+      const bannerHeight = Math.max(80, Math.floor(height * 0.15));
+      const fontSize = Math.floor(bannerHeight * 0.5);
       
       // Formatar o preço
       const priceText = finalPrice 
         ? `R$ ${finalPrice.toFixed(2).replace('.', ',')}`
         : 'Consulte o preço';
       
-      // Criar SVG para a faixa de preço (usando sharp para renderizar)
-      const svgBanner = `<svg width="${width}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
-        <rect width="${width}" height="${bannerHeight}" fill="#1a1a1a" opacity="0.9"/>
-        <text x="${width / 2}" y="${Math.floor(bannerHeight * 0.65)}" text-anchor="middle" font-family="'DejaVu Sans', 'Arial', sans-serif" font-size="${fontSize}" font-weight="700" fill="#FFD700" stroke="#000000" stroke-width="3" paint-order="stroke">${priceText}</text>
-      </svg>`;
+      // Criar faixa usando canvas
+      const canvas = createCanvas(width, bannerHeight);
+      const ctx = canvas.getContext('2d');
       
-      try {
-        // Render SVG para PNG buffer usando sharp
-        const bannerBuffer = await sharp(Buffer.from(svgBanner)).png().toBuffer();
-        
-        // Compor imagem original com faixa de preço
-        await image
-          .resize(width, height, { fit: 'cover' })
-          .composite([{
-            input: bannerBuffer,
-            gravity: 'south'
-          }])
-          .jpeg({ quality: 90 })
-          .toFile(filepath);
-      } catch (svgError) {
-        // Fallback: se SVG falhar, criar banner simples em PNG
-        console.warn('SVG render failed, using fallback:', svgError);
-        
-        // Criar uma imagem simples com texto usando sharp
-        const bannerWidth = width;
-        const bannerPng = await sharp({
-          create: {
-            width: bannerWidth,
-            height: bannerHeight,
-            channels: 4,
-            background: { r: 26, g: 26, b: 26, alpha: 0.9 }
-          }
-        })
+      // Fundo preto semi-transparente
+      ctx.fillStyle = 'rgba(26, 26, 26, 0.92)';
+      ctx.fillRect(0, 0, width, bannerHeight);
+      
+      // Texto em dourado com contorno preto
+      ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Contorno preto
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 4;
+      ctx.strokeText(priceText, width / 2, bannerHeight / 2);
+      
+      // Preenchimento dourado
+      ctx.fillStyle = '#FFD700';
+      ctx.fillText(priceText, width / 2, bannerHeight / 2);
+      
+      // Converter canvas para buffer
+      const bannerBuffer = canvas.toBuffer('image/png');
+      
+      // Compor imagem original com faixa de preço
+      await sharp(buffer)
+        .resize(width, height, { fit: 'cover' })
         .composite([{
-          input: Buffer.from(`<svg width="${bannerWidth}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
-            <text x="${bannerWidth / 2}" y="${Math.floor(bannerHeight * 0.65)}" text-anchor="middle" font-family="'DejaVu Sans', 'Arial', sans-serif" font-size="${fontSize}" font-weight="700" fill="#FFD700" stroke="#000000" stroke-width="3" paint-order="stroke">${priceText}</text>
-          </svg>`),
-          gravity: 'center'
+          input: bannerBuffer,
+          gravity: 'south'
         }])
-        .png()
-        .toBuffer();
-        
-        await image
-          .resize(width, height, { fit: 'cover' })
-          .composite([{
-            input: bannerPng,
-            gravity: 'south'
-          }])
-          .jpeg({ quality: 90 })
-          .toFile(filepath);
-      }
+        .jpeg({ quality: 90 })
+        .toFile(filepath);
       
       imageUrl = `/uploads/${filename}`;
     } catch (error) {
@@ -1388,63 +1371,48 @@ app.patch('/showcase/:id', async (req: any, reply) => {
       await sharp(buffer).jpeg({ quality: 92 }).toFile(origFilepath);
       newOriginalUrl = `/uploads/${origFilename}`;
 
-      const image = sharp(buffer);
-      const metadata = await image.metadata();
+      // Processar imagem com Sharp + Canvas para adicionar faixa de preço
+      const metadata = await sharp(buffer).metadata();
       const width = metadata.width || 800;
       const height = metadata.height || 600;
-      const bannerHeight = Math.max(60, Math.floor(height * 0.15));
-      const fontSize = Math.floor(bannerHeight * 0.55);
+      const bannerHeight = Math.max(80, Math.floor(height * 0.15));
+      const fontSize = Math.floor(bannerHeight * 0.5);
       const priceText = finalPrice ? `R$ ${finalPrice.toFixed(2).replace('.', ',')}` : 'Consulte o preço';
-      const svgBanner = `<svg width="${width}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
-        <rect width="${width}" height="${bannerHeight}" fill="#1a1a1a" opacity="0.9"/>
-        <text x="${width / 2}" y="${Math.floor(bannerHeight * 0.65)}" text-anchor="middle" font-family="'DejaVu Sans', 'Arial', sans-serif" font-size="${fontSize}" font-weight="700" fill="#FFD700" stroke="#000000" stroke-width="3" paint-order="stroke">${priceText}</text>
-      </svg>`;
-
-      try {
-        // Render SVG para PNG buffer usando sharp
-        const bannerBuffer = await sharp(Buffer.from(svgBanner)).png().toBuffer();
-        
-        // Compor imagem original com faixa de preço
-        await image
-          .resize(width, height, { fit: 'cover' })
-          .composite([{
-            input: bannerBuffer,
-            gravity: 'south'
-          }])
-          .jpeg({ quality: 90 })
-          .toFile(filepath);
-      } catch (svgError) {
-        // Fallback: se SVG falhar, criar banner simples em PNG
-        console.warn('SVG render failed, using fallback:', svgError);
-        
-        // Criar uma imagem simples com texto usando sharp
-        const bannerWidth = width;
-        const bannerPng = await sharp({
-          create: {
-            width: bannerWidth,
-            height: bannerHeight,
-            channels: 4,
-            background: { r: 26, g: 26, b: 26, alpha: 0.9 }
-          }
-        })
+      
+      // Criar faixa usando canvas
+      const canvas = createCanvas(width, bannerHeight);
+      const ctx = canvas.getContext('2d');
+      
+      // Fundo preto semi-transparente
+      ctx.fillStyle = 'rgba(26, 26, 26, 0.92)';
+      ctx.fillRect(0, 0, width, bannerHeight);
+      
+      // Texto em dourado com contorno preto
+      ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Contorno preto
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 4;
+      ctx.strokeText(priceText, width / 2, bannerHeight / 2);
+      
+      // Preenchimento dourado
+      ctx.fillStyle = '#FFD700';
+      ctx.fillText(priceText, width / 2, bannerHeight / 2);
+      
+      // Converter canvas para buffer
+      const bannerBuffer = canvas.toBuffer('image/png');
+      
+      // Compor imagem original com faixa de preço
+      await sharp(buffer)
+        .resize(width, height, { fit: 'cover' })
         .composite([{
-          input: Buffer.from(`<svg width="${bannerWidth}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
-            <text x="${bannerWidth / 2}" y="${Math.floor(bannerHeight * 0.65)}" text-anchor="middle" font-family="'DejaVu Sans', 'Arial', sans-serif" font-size="${fontSize}" font-weight="700" fill="#FFD700" stroke="#000000" stroke-width="3" paint-order="stroke">${priceText}</text>
-          </svg>`),
-          gravity: 'center'
+          input: bannerBuffer,
+          gravity: 'south'
         }])
-        .png()
-        .toBuffer();
-        
-        await image
-          .resize(width, height, { fit: 'cover' })
-          .composite([{
-            input: bannerPng,
-            gravity: 'south'
-          }])
-          .jpeg({ quality: 90 })
-          .toFile(filepath);
-      }
+        .jpeg({ quality: 90 })
+        .toFile(filepath);
 
       // Remove a imagem anterior se existir
       if (item.imageUrl) {
