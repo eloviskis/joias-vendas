@@ -2625,7 +2625,6 @@ function MostruarioPage({ token }: { token: string }) {
     
     // Se tiver imagem
     if (item.imageUrl) {
-      // Detectar se é móbile
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
       
       if (isMobile) {
@@ -2646,25 +2645,50 @@ function MostruarioPage({ token }: { token: string }) {
         } catch (err) {
           console.warn('Web Share API falhou:', err);
         }
-      }
-      
-      // Desktop ou fallback: abrir WhatsApp Web com o texto; usuário anexa a imagem manualmente
-      console.log('Abrindo WhatsApp Web com texto');
-      if (phone) {
-        const cleanPhone = phone.replace(/\D/g, '');
-        window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
       } else {
-        window.open(`https://web.whatsapp.com/send?text=${encodedText}`, '_blank');
+        // Desktop: copiar imagem para clipboard e abrir WhatsApp Web
+        try {
+          console.log('Tentando copiar imagem para clipboard (desktop)...');
+          const filename = item.imageUrl.split('/').pop();
+          const downloadUrl = `/api/download/${filename}`;
+          const res = await fetch(downloadUrl);
+          const blob = await res.blob();
+          
+          // Tentar copiar para clipboard
+          if (navigator.clipboard && 'write' in navigator.clipboard) {
+            try {
+              const clipboardItem = new ClipboardItem({ [blob.type]: blob });
+              await navigator.clipboard.write([clipboardItem]);
+              console.log('Imagem copiada para clipboard com sucesso');
+              
+              // Abrir WhatsApp Web
+              if (phone) {
+                const cleanPhone = phone.replace(/\D/g, '');
+                window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
+              } else {
+                window.open(`https://web.whatsapp.com/send?text=${encodedText}`, '_blank');
+              }
+              
+              // Notificar usuário
+              alert('✅ Imagem copiada para a área de transferência!\n\nNo WhatsApp Web:\n1. Cole a imagem com Ctrl+V\n2. Envie a mensagem');
+              return;
+            } catch (clipErr) {
+              console.warn('Falhou ao copiar para clipboard:', clipErr);
+            }
+          }
+        } catch (err) {
+          console.warn('Erro preparando imagem para clipboard:', err);
+        }
       }
+    }
+    
+    // Fallback: apenas abrir WhatsApp Web com o texto
+    console.log('Abrindo WhatsApp Web com texto (sem imagem automática)');
+    if (phone) {
+      const cleanPhone = phone.replace(/\D/g, '');
+      window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
     } else {
-      // Sem imagem, apenas enviar mensagem
-      console.log('Sem imagem, enviando apenas texto');
-      if (phone) {
-        const cleanPhone = phone.replace(/\D/g, '');
-        window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
-      } else {
-        window.open(`https://web.whatsapp.com/send?text=${encodedText}`, '_blank');
-      }
+      window.open(`https://web.whatsapp.com/send?text=${encodedText}`, '_blank');
     }
   };
 
