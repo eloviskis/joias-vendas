@@ -1146,6 +1146,13 @@ app.post('/showcase', async (req: any, reply) => {
     return reply.code(401).send({ error: 'Unauthorized' });
   }
 
+  try {
+    const token = authHeader.replace('Bearer ', '');
+    jwt.verify(token, JWT_SECRET);
+  } catch (error) {
+    return reply.code(401).send({ error: 'Invalid token' });
+  }
+
   const { name, itemName, itemCode, factor, weight, baseValue, price, description, imageBase64 } = req.body || {};
   
   // Aceitar 'name' ou 'itemName'
