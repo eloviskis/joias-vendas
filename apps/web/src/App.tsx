@@ -2633,7 +2633,9 @@ function MostruarioPage({ token }: { token: string }) {
           console.log('Tentando Web Share API (mobile)...');
           const filename = item.imageUrl.split('/').pop();
           const downloadUrl = `/api/download/${filename}`;
-          const res = await fetch(downloadUrl);
+          const res = await fetch(downloadUrl, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
           const blob = await res.blob();
           const shareFile = new File([blob], `${item.itemName.replace(/\s+/g, '-')}.jpg`, { type: 'image/jpeg' });
           
@@ -2651,13 +2653,21 @@ function MostruarioPage({ token }: { token: string }) {
           console.log('Tentando copiar imagem para clipboard (desktop)...');
           const filename = item.imageUrl.split('/').pop();
           const downloadUrl = `/api/download/${filename}`;
-          const res = await fetch(downloadUrl);
+          const res = await fetch(downloadUrl, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          if (!res.ok) {
+            throw new Error(`Erro ao baixar imagem: ${res.status} ${res.statusText}`);
+          }
+          
           const blob = await res.blob();
+          console.log('Blob recebido:', blob.type, blob.size);
           
           // Tentar copiar para clipboard
           if (navigator.clipboard && 'write' in navigator.clipboard) {
             try {
-              const clipboardItem = new ClipboardItem({ [blob.type]: blob });
+              const clipboardItem = new ClipboardItem({ 'image/jpeg': blob });
               await navigator.clipboard.write([clipboardItem]);
               console.log('Imagem copiada para clipboard com sucesso');
               
