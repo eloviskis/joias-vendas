@@ -2623,7 +2623,7 @@ function MostruarioPage({ token }: { token: string }) {
     
     const encodedText = encodeURIComponent(text);
     
-    // Se tiver imagem, tentar fluxos em ordem: Web Share (mobile), Clipboard (desktop), fallback download+link
+    // Se tiver imagem, tentar fluxos em ordem: Web Share (mobile), Clipboard (desktop), fallback opcional
     if (item.imageUrl) {
       try {
         console.log('Preparando imagem para compartilhar...');
@@ -2635,9 +2635,11 @@ function MostruarioPage({ token }: { token: string }) {
         console.log('Blob recebido:', blob.type, blob.size);
         const shareFile = new File([blob], `${item.itemName.replace(/\s+/g, '-')}.jpg`, { type: 'image/jpeg' });
 
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
         // 1) Mobile: Web Share API com arquivo
-        if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
-          console.log('Compartilhando via Web Share API');
+        if (isMobile && navigator.canShare && navigator.canShare({ files: [shareFile] })) {
+          console.log('Compartilhando via Web Share API (mobile)');
           await navigator.share({ files: [shareFile], text });
           return;
         }
@@ -2655,9 +2657,16 @@ function MostruarioPage({ token }: { token: string }) {
               }
             }
 
-            await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+            // Copia imagem (e texto como alternativa) para o clipboard
+            const clipboardItem = new ClipboardItem({
+              [blob.type]: blob,
+              'text/plain': new Blob([text], { type: 'text/plain' })
+            });
+
+            await navigator.clipboard.write([clipboardItem]);
             console.log('Imagem copiada para a área de transferência');
-            // Abrir WhatsApp Web com o texto; usuário só cola (Ctrl+V) a imagem
+
+            // Abrir WhatsApp Web com o texto já preenchido
             if (phone) {
               const cleanPhone = phone.replace(/\D/g, '');
               window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
@@ -2677,7 +2686,7 @@ function MostruarioPage({ token }: { token: string }) {
         console.warn('Erro preparando imagem; usando fallback de download:', err);
       }
 
-      // 3) Fallback: baixar e abrir WhatsApp com texto
+      // 3) Fallback: download opcional + link WhatsApp (texto garantido via URL)
       console.log('Fallback: download + WhatsApp link');
       const wantDownload = confirm('Quer baixar a imagem para anexar manualmente no WhatsApp Web?');
       if (wantDownload) {
@@ -2693,18 +2702,18 @@ function MostruarioPage({ token }: { token: string }) {
       
       if (phone) {
         const cleanPhone = phone.replace(/\D/g, '');
-        window.open(`https://wa.me/55${cleanPhone}?text=${encodedText}`, '_blank');
+        window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
       } else {
-        window.open(`https://wa.me/?text=${encodedText}`, '_blank');
+        window.open(`https://web.whatsapp.com/send?text=${encodedText}`, '_blank');
       }
     } else {
       // Sem imagem, apenas enviar mensagem
       console.log('Sem imagem, enviando apenas texto');
       if (phone) {
         const cleanPhone = phone.replace(/\D/g, '');
-        window.open(`https://wa.me/55${cleanPhone}?text=${encodedText}`, '_blank');
+        window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
       } else {
-        window.open(`https://wa.me/?text=${encodedText}`, '_blank');
+        window.open(`https://web.whatsapp.com/send?text=${encodedText}`, '_blank');
       }
     }
   };
