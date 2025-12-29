@@ -2385,11 +2385,6 @@ function MostruarioPage({ token }: { token: string }) {
 
 `;
 `;
-`;
-
-`;
-
-`;
   const shareWhatsApp = async (item: any, phone?: string) => {
     console.log('shareWhatsApp chamado para item:', item);
     const price = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price);
