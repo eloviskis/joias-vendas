@@ -2383,24 +2383,28 @@ function MostruarioPage({ token }: { token: string }) {
     }
   };
 
+`;
+`;
+`;
+
+`;
+
+`;
   const shareWhatsApp = async (item: any, phone?: string) => {
     console.log('shareWhatsApp chamado para item:', item);
     const price = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price);
 
-    // Montar mensagem somente em texto, sem link/preview
-    let text = `💎 VANI E ELO JOIAS
-`;
-    text += `━━━━━━━━━━━━━━━━━━━━
-`;
-    text += `Imagem_Pequena
-`;
-    text += `${item.itemName || ''}
-
-`;
-    text += `💰 Valor: ${price}
-
-`;
+    // Montar mensagem com link da imagem para gerar miniatura automática
+    let text = `💎 VANI E ELO JOIAS\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━\n`;
+    text += `${item.itemName || ''}\n\n`;
+    text += `💰 Valor: ${price}\n\n`;
     text += `━━━━━━━━━━━━━━━━━━━━`;
+
+    if (item.imageUrl) {
+      const imageUrl = item.imageUrl.startsWith('http') ? item.imageUrl : `${window.location.origin}${item.imageUrl}`;
+      text += `\n\n${imageUrl}`;
+    }
 
     const encodedText = encodeURIComponent(text);
 
