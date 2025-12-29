@@ -434,6 +434,9 @@ export default function App() {
   const [allSales, setAllSales] = useState<any[]>([]);
   const [allExpenses, setAllExpenses] = useState<any[]>([]);
   const [forecastData, setForecastData] = useState<{ month: string; value: number; accumulated: number; installments?: any[] }[]>([]);
+  const [forecastYear, setForecastYear] = useState<number>(new Date().getFullYear());
+  const [forecastYears, setForecastYears] = useState<number[]>([]);
+  const [pendingInstallmentsAll, setPendingInstallmentsAll] = useState<any[]>([]);
   const [shareModalData, setShareModalData] = useState<{ sale: any; client: any; message?: string } | null>(null);
   const [editingInstallment, setEditingInstallment] = useState<any>(null);
   const [expandedMonths, setExpandedMonths] = useState<number[]>([]);
@@ -461,6 +464,38 @@ export default function App() {
     }
   };
 
+  const computeForecast = (pending: any[], year: number) => {
+    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const forecast: { [key: string]: { value: number; installments: any[] } } = {};
+    for (let i = 0; i < 12; i++) {
+      forecast[`${year}-${i}`] = { value: 0, installments: [] };
+    }
+
+    pending.forEach((inst: any) => {
+      const dueDate = new Date(inst.dueDate);
+      const y = dueDate.getFullYear();
+      const m = dueDate.getMonth();
+      if (y === year && !inst.paid) {
+        forecast[`${y}-${m}`].value += inst.amount || 0;
+        forecast[`${y}-${m}`].installments.push(inst);
+      }
+    });
+
+    let accumulated = 0;
+    const forecastArray = [];
+    for (let i = 0; i < 12; i++) {
+      const monthData = forecast[`${year}-${i}`];
+      accumulated += monthData.value;
+      forecastArray.push({
+        month: months[i],
+        value: monthData.value,
+        accumulated,
+        installments: monthData.installments
+      });
+    }
+    setForecastData(forecastArray);
+  };
+
   const loadDashboard = async () => {
     const headers = { Authorization: `Bearer ${token}` };
     const [statsRes, salesRes, installmentsRes, revenueRes, allInstallmentsRes] = await Promise.all([
@@ -478,42 +513,30 @@ export default function App() {
     // Calcular previsão de recebimentos
     const allPending = await allInstallmentsRes.json();
     if (Array.isArray(allPending)) {
-      const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-      const currentYear = new Date().getFullYear();
-      const forecast: { [key: string]: { value: number; installments: any[] } } = {};
-      
-      // Inicializar todos os meses do ano atual
-      for (let i = 0; i < 12; i++) {
-        forecast[`${currentYear}-${i}`] = { value: 0, installments: [] };
-      }
-      
-      // Somar parcelas por mês
+      setPendingInstallmentsAll(allPending);
+      const yearsSet = new Set<number>();
       allPending.forEach((inst: any) => {
-        const dueDate = new Date(inst.dueDate);
-        const year = dueDate.getFullYear();
-        const month = dueDate.getMonth();
-        if (year === currentYear && !inst.paid) {
-          forecast[`${year}-${month}`].value += (inst.amount || 0);
-          forecast[`${year}-${month}`].installments.push(inst);
-        }
+        const y = new Date(inst.dueDate).getFullYear();
+        yearsSet.add(y);
       });
-      
-      // Converter para array com acumulado
-      let accumulated = 0;
-      const forecastArray = [];
-      for (let i = 0; i < 12; i++) {
-        const monthData = forecast[`${currentYear}-${i}`];
-        accumulated += monthData.value;
-        forecastArray.push({
-          month: months[i],
-          value: monthData.value,
-          accumulated,
-          installments: monthData.installments
-        });
-      }
-      setForecastData(forecastArray);
+      const sortedYears = Array.from(yearsSet).sort((a, b) => a - b);
+      setForecastYears(sortedYears);
+
+      const currentYear = new Date().getFullYear();
+      const targetYear = yearsSet.has(forecastYear)
+        ? forecastYear
+        : (sortedYears.includes(currentYear) ? currentYear : (sortedYears[sortedYears.length - 1] || currentYear));
+      setForecastYear(targetYear);
+      computeForecast(allPending, targetYear);
     }
   };
+
+  // Recalcular previsão ao trocar o ano
+  useEffect(() => {
+    if (pendingInstallmentsAll.length > 0) {
+      computeForecast(pendingInstallmentsAll, forecastYear);
+    }
+  }, [forecastYear, pendingInstallmentsAll]);
 
   const openStatsModal = async (type: string) => {
     setStatsModal(type);
@@ -924,7 +947,22 @@ export default function App() {
             {/* Previsão de Recebimentos */}
             {forecastData.length > 0 && (
               <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-                <h2 className="text-xl font-bold text-gray-800 mb-4">📅 Previsão de Recebimentos ({new Date().getFullYear()})</h2>
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                  <h2 className="text-xl font-bold text-gray-800">📅 Previsão de Recebimentos ({forecastYear})</h2>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600" htmlFor="forecastYear">Ano:</label>
+                    <select
+                      id="forecastYear"
+                      value={forecastYear}
+                      onChange={(e) => setForecastYear(Number(e.target.value))}
+                      className="border-2 border-gray-200 rounded-lg px-3 py-1 text-sm focus:border-purple-600 focus:outline-none"
+                    >
+                      {(forecastYears.length > 0 ? forecastYears : [new Date().getFullYear()]).map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
                 <p className="text-sm text-gray-600 mb-4">Parcelas pendentes a receber em cada mês</p>
                 
                 {/* Cards de resumo */}
