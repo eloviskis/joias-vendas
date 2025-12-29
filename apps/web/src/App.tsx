@@ -2645,6 +2645,16 @@ function MostruarioPage({ token }: { token: string }) {
         // 2) Desktop: copiar imagem para a área de transferência e abrir WhatsApp Web
         if (navigator.clipboard && 'write' in navigator.clipboard && typeof ClipboardItem !== 'undefined') {
           try {
+            // Solicita permissão se aplicável
+            if (navigator.permissions && 'query' in navigator.permissions) {
+              try {
+                const perm = await navigator.permissions.query({ name: 'clipboard-write' as PermissionName });
+                console.log('Permissão clipboard-write:', perm.state);
+              } catch (permErr) {
+                console.warn('Não foi possível consultar permissão clipboard-write:', permErr);
+              }
+            }
+
             await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
             console.log('Imagem copiada para a área de transferência');
             // Abrir WhatsApp Web com o texto; usuário só cola (Ctrl+V) a imagem
@@ -2657,7 +2667,8 @@ function MostruarioPage({ token }: { token: string }) {
             alert('Imagem copiada! Cole (Ctrl+V) no chat do WhatsApp Web.');
             return;
           } catch (err) {
-            console.warn('Falhou ao copiar imagem para clipboard, usando fallback:', err);
+            console.warn('Falhou ao copiar imagem para clipboard:', err);
+            alert('Não consegui copiar a imagem automaticamente. Vou abrir o WhatsApp Web com o texto; se preferir, confirme para baixar a imagem e anexar manualmente.');
           }
         }
 
@@ -2668,23 +2679,24 @@ function MostruarioPage({ token }: { token: string }) {
 
       // 3) Fallback: baixar e abrir WhatsApp com texto
       console.log('Fallback: download + WhatsApp link');
-      const filename = item.imageUrl.split('/').pop();
-      const downloadUrl = `/api/download/${filename}`;
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = `${item.itemName.replace(/\s+/g, '-')}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const wantDownload = confirm('Quer baixar a imagem para anexar manualmente no WhatsApp Web?');
+      if (wantDownload) {
+        const filename = item.imageUrl.split('/').pop();
+        const downloadUrl = `/api/download/${filename}`;
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `${item.itemName.replace(/\s+/g, '-')}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
       
-      setTimeout(() => {
-        if (phone) {
-          const cleanPhone = phone.replace(/\D/g, '');
-          window.open(`https://wa.me/55${cleanPhone}?text=${encodedText}`, '_blank');
-        } else {
-          window.open(`https://wa.me/?text=${encodedText}`, '_blank');
-        }
-      }, 500);
+      if (phone) {
+        const cleanPhone = phone.replace(/\D/g, '');
+        window.open(`https://wa.me/55${cleanPhone}?text=${encodedText}`, '_blank');
+      } else {
+        window.open(`https://wa.me/?text=${encodedText}`, '_blank');
+      }
     } else {
       // Sem imagem, apenas enviar mensagem
       console.log('Sem imagem, enviando apenas texto');
