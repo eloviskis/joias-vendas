@@ -2392,6 +2392,7 @@ function MostruarioPage({ token }: { token: string }) {
   const [factor, setFactor] = useState('');
   const [baseValue, setBaseValue] = useState('');
   const [description, setDescription] = useState('');
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   useEffect(() => {
     loadItems();
@@ -2871,7 +2872,7 @@ function MostruarioPage({ token }: { token: string }) {
           <div key={item.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition relative">
             {/* Imagem */}
             {item.imageUrl && (
-              <div className="relative h-64 bg-gray-100">
+              <div className="relative h-64 bg-gray-100 cursor-pointer" onClick={() => setSelectedImage(item.imageUrl)}>
                 <img
                   src={item.imageUrl}
                   alt={item.itemName}
@@ -2887,7 +2888,12 @@ function MostruarioPage({ token }: { token: string }) {
             
             {/* Informações */}
             <div className="p-4">
-              <h3 className="font-bold text-lg text-gray-800 mb-1">{item.itemName}</h3>
+              <h3 
+                className="font-bold text-lg text-gray-800 mb-1 cursor-pointer hover:text-purple-600 transition"
+                onClick={() => item.imageUrl && setSelectedImage(item.imageUrl)}
+              >
+                {item.itemName}
+              </h3>
               {item.itemCode && (
                 <p className="text-sm text-gray-500 mb-2">📦 {item.itemCode}</p>
               )}
@@ -2976,6 +2982,29 @@ function MostruarioPage({ token }: { token: string }) {
           >
             ➕ Adicionar Primeira Peça
           </button>
+        </div>
+      )}
+
+      {/* Modal de Imagem */}
+      {selectedImage && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4"
+          onClick={() => setSelectedImage(null)}
+        >
+          <div className="relative max-w-4xl max-h-screen">
+            <button
+              onClick={() => setSelectedImage(null)}
+              className="absolute top-4 right-4 bg-white rounded-full w-10 h-10 flex items-center justify-center text-gray-800 hover:bg-gray-200 transition z-10 shadow-lg"
+            >
+              ✕
+            </button>
+            <img
+              src={selectedImage}
+              alt="Visualização"
+              className="max-w-full max-h-screen object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
         </div>
       )}
     </div>
