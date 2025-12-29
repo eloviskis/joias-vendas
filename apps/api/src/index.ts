@@ -182,7 +182,8 @@ app.delete('/users/:id', async (req: any, reply) => {
 // Simple auth hook (optional)
 app.addHook('preHandler', async (req: any, reply) => {
   const path = req.url || req.routerPath || '';
-  if (path.startsWith('/auth')) return;
+  // Permitir acesso sem autenticação para /auth e /uploads
+  if (path.startsWith('/auth') || path.startsWith('/uploads')) return;
   const auth = req.headers.authorization;
   if (!auth?.startsWith('Bearer ')) return reply.code(401).send({ error: 'No token' });
   try {
