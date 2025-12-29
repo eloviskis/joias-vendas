@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Showcase" ALTER COLUMN "baseValue" DROP NOT NULL,
+ALTER COLUMN "price" DROP NOT NULL;

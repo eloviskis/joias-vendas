@@ -99,8 +99,8 @@ model Showcase {
   itemName    String
   itemCode    String?
   factor      Float
-  baseValue   Float
-  price       Float
+  baseValue   Float?
+  price       Float?
   description String?
   imageUrl    String?
   createdAt   DateTime @default(now())
