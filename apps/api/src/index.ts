@@ -542,44 +542,96 @@ app.get('/dashboard/stats', async () => {
   };
 });
 
-app.get('/dashboard/recent-sales', async () => {
-  return prisma.sale.findMany({
-    take: 10,
-    orderBy: { saleDate: 'desc' },
-    include: { client: true }
-  });
+app.get('/dashboard/recent-sales', async (req: any, reply) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return reply.code(401).send({ error: 'Unauthorized' });
+  }
+
+  try {
+    const token = authHeader.replace('Bearer ', '');
+    jwt.verify(token, JWT_SECRET);
+  } catch (error) {
+    return reply.code(401).send({ error: 'Invalid token' });
+  }
+
+  try {
+    const sales = await prisma.sale.findMany({
+      take: 10,
+      orderBy: { saleDate: 'desc' },
+      include: { client: true }
+    });
+    return Array.isArray(sales) ? sales : [];
+  } catch (error: any) {
+    console.error('Erro ao buscar vendas recentes:', error);
+    return [];
+  }
 });
 
-app.get('/dashboard/pending-installments', async () => {
-  const now = new Date();
-  return prisma.installment.findMany({
-    where: {
-      paid: false,
-      dueDate: { lte: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) }
-    },
-    orderBy: { dueDate: 'asc' },
-    take: 20,
-    include: { sale: { include: { client: true } } }
-  });
+app.get('/dashboard/pending-installments', async (req: any, reply) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return reply.code(401).send({ error: 'Unauthorized' });
+  }
+
+  try {
+    const token = authHeader.replace('Bearer ', '');
+    jwt.verify(token, JWT_SECRET);
+  } catch (error) {
+    return reply.code(401).send({ error: 'Invalid token' });
+  }
+
+  try {
+    const now = new Date();
+    const installments = await prisma.installment.findMany({
+      where: {
+        paid: false,
+        dueDate: { lte: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) }
+      },
+      orderBy: { dueDate: 'asc' },
+      take: 20,
+      include: { sale: { include: { client: true } } }
+    });
+    return Array.isArray(installments) ? installments : [];
+  } catch (error: any) {
+    console.error('Erro ao buscar parcelas pendentes:', error);
+    return [];
+  }
 });
 
-app.get('/dashboard/monthly-revenue', async () => {
-  const sales = await prisma.sale.findMany({
-    where: {
-      saleDate: {
-        gte: new Date(new Date().getFullYear(), 0, 1)
-      }
-    },
-    select: { saleDate: true, totalValue: true }
-  });
-  
-  const monthly = Array(12).fill(0);
-  sales.forEach(sale => {
-    const month = new Date(sale.saleDate).getMonth();
-    monthly[month] += sale.totalValue;
-  });
-  
-  return monthly;
+app.get('/dashboard/monthly-revenue', async (req: any, reply) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return reply.code(401).send({ error: 'Unauthorized' });
+  }
+
+  try {
+    const token = authHeader.replace('Bearer ', '');
+    jwt.verify(token, JWT_SECRET);
+  } catch (error) {
+    return reply.code(401).send({ error: 'Invalid token' });
+  }
+
+  try {
+    const sales = await prisma.sale.findMany({
+      where: {
+        saleDate: {
+          gte: new Date(new Date().getFullYear(), 0, 1)
+        }
+      },
+      select: { saleDate: true, totalValue: true }
+    });
+    
+    const monthly = Array(12).fill(0);
+    sales.forEach(sale => {
+      const month = new Date(sale.saleDate).getMonth();
+      monthly[month] += sale.totalValue;
+    });
+    return monthly;
+  } catch (error: any) {
+    console.error('Erro ao buscar receita mensal:', error);
+    return Array(12).fill(0);
+  }
 });
 
 // Clientes
