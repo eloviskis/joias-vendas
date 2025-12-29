@@ -1233,7 +1233,7 @@ app.post('/showcase', async (req: any, reply) => {
       // Criar SVG para a faixa de preço (usando sharp para renderizar)
       const svgBanner = `<svg width="${width}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
         <rect width="${width}" height="${bannerHeight}" fill="#1a1a1a" opacity="0.9"/>
-        <text x="${width/2}" y="${Math.floor(bannerHeight/2)}" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="bold" fill="#FFD700">${priceText}</text>
+        <text x="${width / 2}" y="${Math.floor(bannerHeight * 0.65)}" text-anchor="middle" font-family="'DejaVu Sans', 'Arial', sans-serif" font-size="${fontSize}" font-weight="700" fill="#FFD700" stroke="#000000" stroke-width="3" paint-order="stroke">${priceText}</text>
       </svg>`;
       
       try {
@@ -1265,7 +1265,7 @@ app.post('/showcase', async (req: any, reply) => {
         })
         .composite([{
           input: Buffer.from(`<svg width="${bannerWidth}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
-            <text x="${bannerWidth/2}" y="${Math.floor(bannerHeight/2)}" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-size="${fontSize}" font-weight="bold" fill="#FFD700">${priceText}</text>
+            <text x="${bannerWidth / 2}" y="${Math.floor(bannerHeight * 0.65)}" text-anchor="middle" font-family="'DejaVu Sans', 'Arial', sans-serif" font-size="${fontSize}" font-weight="700" fill="#FFD700" stroke="#000000" stroke-width="3" paint-order="stroke">${priceText}</text>
           </svg>`),
           gravity: 'center'
         }])
@@ -1397,7 +1397,7 @@ app.patch('/showcase/:id', async (req: any, reply) => {
       const priceText = finalPrice ? `R$ ${finalPrice.toFixed(2).replace('.', ',')}` : 'Consulte o preço';
       const svgBanner = `<svg width="${width}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
         <rect width="${width}" height="${bannerHeight}" fill="#1a1a1a" opacity="0.9"/>
-        <text x="${width/2}" y="${Math.floor(bannerHeight/2)}" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="bold" fill="#FFD700">${priceText}</text>
+        <text x="${width / 2}" y="${Math.floor(bannerHeight * 0.65)}" text-anchor="middle" font-family="'DejaVu Sans', 'Arial', sans-serif" font-size="${fontSize}" font-weight="700" fill="#FFD700" stroke="#000000" stroke-width="3" paint-order="stroke">${priceText}</text>
       </svg>`;
 
       try {
@@ -1429,7 +1429,7 @@ app.patch('/showcase/:id', async (req: any, reply) => {
         })
         .composite([{
           input: Buffer.from(`<svg width="${bannerWidth}" height="${bannerHeight}" xmlns="http://www.w3.org/2000/svg">
-            <text x="${bannerWidth/2}" y="${Math.floor(bannerHeight/2)}" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-size="${fontSize}" font-weight="bold" fill="#FFD700">${priceText}</text>
+            <text x="${bannerWidth / 2}" y="${Math.floor(bannerHeight * 0.65)}" text-anchor="middle" font-family="'DejaVu Sans', 'Arial', sans-serif" font-size="${fontSize}" font-weight="700" fill="#FFD700" stroke="#000000" stroke-width="3" paint-order="stroke">${priceText}</text>
           </svg>`),
           gravity: 'center'
         }])
