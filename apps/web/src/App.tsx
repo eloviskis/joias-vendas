@@ -437,6 +437,9 @@ export default function App() {
   const [forecastYear, setForecastYear] = useState<number>(new Date().getFullYear());
   const [forecastYears, setForecastYears] = useState<number[]>([]);
   const [pendingInstallmentsAll, setPendingInstallmentsAll] = useState<any[]>([]);
+  const [monthlyRevenueByYear, setMonthlyRevenueByYear] = useState<Record<number, number[]>>({});
+  const [monthlyRevenueYear, setMonthlyRevenueYear] = useState<number>(new Date().getFullYear());
+  const [monthlyRevenueYears, setMonthlyRevenueYears] = useState<number[]>([]);
   const [shareModalData, setShareModalData] = useState<{ sale: any; client: any; message?: string } | null>(null);
   const [editingInstallment, setEditingInstallment] = useState<any>(null);
   const [expandedMonths, setExpandedMonths] = useState<number[]>([]);
@@ -508,7 +511,25 @@ export default function App() {
     setStats(await statsRes.json());
     setRecentSales(await salesRes.json());
     setPendingInstallments(await installmentsRes.json());
-    setMonthlyRevenue(await revenueRes.json());
+    const monthlyRevenueResp = await revenueRes.json();
+    if (Array.isArray(monthlyRevenueResp)) {
+      const cy = new Date().getFullYear();
+      setMonthlyRevenueByYear({ [cy]: monthlyRevenueResp });
+      setMonthlyRevenueYears([cy]);
+      setMonthlyRevenueYear(cy);
+      setMonthlyRevenue(monthlyRevenueResp);
+    } else if (monthlyRevenueResp && typeof monthlyRevenueResp === 'object') {
+      const entries = Object.entries(monthlyRevenueResp) as [string, number[]][];
+      const years = entries.map(([y]) => Number(y)).sort((a, b) => a - b);
+      setMonthlyRevenueByYear(entries.reduce((acc, [y, arr]) => ({ ...acc, [Number(y)]: arr }), {}));
+      setMonthlyRevenueYears(years);
+      const cy = new Date().getFullYear();
+      const target = years.includes(monthlyRevenueYear) ? monthlyRevenueYear : (years.includes(cy) ? cy : years[years.length - 1]);
+      setMonthlyRevenueYear(target);
+      setMonthlyRevenue(monthlyRevenueResp[target] || Array(12).fill(0));
+    } else {
+      setMonthlyRevenue(Array(12).fill(0));
+    }
     
     // Calcular previsão de recebimentos
     const allPending = await allInstallmentsRes.json();
@@ -537,6 +558,13 @@ export default function App() {
       computeForecast(pendingInstallmentsAll, forecastYear);
     }
   }, [forecastYear, pendingInstallmentsAll]);
+
+  // Recalcular receita mensal ao trocar o ano
+  useEffect(() => {
+    if (monthlyRevenueByYear[monthlyRevenueYear]) {
+      setMonthlyRevenue(monthlyRevenueByYear[monthlyRevenueYear]);
+    }
+  }, [monthlyRevenueYear, monthlyRevenueByYear]);
 
   const openStatsModal = async (type: string) => {
     setStatsModal(type);
@@ -924,7 +952,22 @@ export default function App() {
 
             {/* Gráfico de Receita Mensal */}
             <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">📈 Receita Mensal (2025)</h2>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <h2 className="text-xl font-bold text-gray-800">📈 Receita Mensal ({monthlyRevenueYear})</h2>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600" htmlFor="monthlyRevenueYear">Ano:</label>
+                  <select
+                    id="monthlyRevenueYear"
+                    value={monthlyRevenueYear}
+                    onChange={(e) => setMonthlyRevenueYear(Number(e.target.value))}
+                    className="border-2 border-gray-200 rounded-lg px-3 py-1 text-sm focus:border-purple-600 focus:outline-none"
+                  >
+                    {(monthlyRevenueYears.length > 0 ? monthlyRevenueYears : [new Date().getFullYear()]).map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <div className="flex items-end justify-between h-64 gap-2">
                 {monthlyRevenue.map((value, index) => {
                   const maxValue = Math.max(...monthlyRevenue, 1);
