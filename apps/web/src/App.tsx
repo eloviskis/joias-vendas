@@ -2530,6 +2530,13 @@ function MostruarioPage({ token }: { token: string }) {
       });
       
       if (res.ok) {
+        // Limpar estado de edição se estava editando este item
+        if (editingItemId === id) {
+          setEditingItemId(null);
+          setShowForm(false);
+          setShowImageEditor(false);
+          setPhoto('');
+        }
         loadItems();
       }
     } catch (error) {
