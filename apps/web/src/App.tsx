@@ -1582,6 +1582,9 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
   const [showNewClient, setShowNewClient] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [itemName, setItemName] = useState('');
+  const [itemSearch, setItemSearch] = useState('');
+  const [showItemSuggestions, setShowItemSuggestions] = useState(false);
+  const [showcaseItems, setShowcaseItems] = useState<any[]>([]);
   const [showShareModal, setShowShareModal] = useState(false);
   const [createdSale, setCreatedSale] = useState<any>(null);
   const [createdClient, setCreatedClient] = useState<any>(null);
@@ -1595,6 +1598,22 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
   const [sendCard, setSendCard] = useState(true);
   const [roundUpInstallments, setRoundUpInstallments] = useState(false);
   const [customInstallmentValues, setCustomInstallmentValues] = useState<number[]>([]);
+
+  // Carregar produtos do mostruário
+  useEffect(() => {
+    const loadShowcaseItems = async () => {
+      try {
+        const res = await fetch('/api/showcase', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        setShowcaseItems(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Erro ao carregar mostruário:', error);
+      }
+    };
+    loadShowcaseItems();
+  }, [token]);
 
   // Recalcular valores das parcelas quando mudar número de parcelas ou valor total
   useEffect(() => {
@@ -1645,6 +1664,16 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
     setClientFilter('');
     setShowNewClient(false);
     setShowSuggestions(false);
+  };
+
+  const handleSelectShowcaseItem = (item: any) => {
+    setItemName(item.itemName);
+    setItemCode(item.itemCode || '');
+    setFactor(String(item.factor || ''));
+    setBaseValue(String(item.baseValue || ''));
+    setPhoto(item.imageUrl || '');
+    setItemSearch('');
+    setShowItemSuggestions(false);
   };
 
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1922,6 +1951,59 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
 
       <div className="mb-4">
         <label className="block font-semibold mb-2">💎 Joia</label>
+        <div className="relative">
+          <input 
+            type="text" 
+            className="w-full p-3 border rounded-lg" 
+            placeholder="🔍 Digite o nome da peça ou selecione do mostruário..." 
+            value={itemSearch} 
+            onChange={(e) => {
+              setItemSearch(e.target.value);
+              setShowItemSuggestions(true);
+            }}
+            onFocus={() => setShowItemSuggestions(true)}
+            autoComplete="off"
+          />
+          {showItemSuggestions && itemSearch && showcaseItems.filter((item) => 
+            item.itemName.toLowerCase().includes(itemSearch.toLowerCase())
+          ).length > 0 && (
+            <div className="absolute z-10 w-full mt-1 border-2 border-purple-300 rounded-lg bg-white shadow-xl max-h-72 overflow-y-auto">
+              <div className="sticky top-0 bg-purple-50 px-3 py-2 border-b border-purple-200">
+                <p className="text-xs font-semibold text-purple-700">
+                  {showcaseItems.filter((item) => item.itemName.toLowerCase().includes(itemSearch.toLowerCase())).length} produto(s) encontrado(s)
+                </p>
+              </div>
+              {showcaseItems
+                .filter((item) => item.itemName.toLowerCase().includes(itemSearch.toLowerCase()))
+                .slice(0, 8)
+                .map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => handleSelectShowcaseItem(item)}
+                    className="w-full text-left p-3 hover:bg-purple-50 border-b last:border-b-0 transition flex gap-3 items-start"
+                  >
+                    {item.imageUrl && (
+                      <img 
+                        src={item.imageUrl} 
+                        alt={item.itemName}
+                        className="w-16 h-16 rounded object-cover flex-shrink-0"
+                      />
+                    )}
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-800">{item.itemName}</p>
+                      {item.itemCode && <p className="text-xs text-gray-600">📦 {item.itemCode}</p>}
+                      <p className="text-sm font-bold text-green-600 mt-1">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price || 0)}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mb-4">
         <input type="text" className="w-full p-3 border rounded-lg" placeholder="Nome da peça" value={itemName} onChange={(e) => setItemName(e.target.value)} />
       </div>
 
