@@ -1252,8 +1252,8 @@ app.post('/showcase', async (req: any, reply) => {
       ctx.fillStyle = '#FFD700';
       ctx.fillText(priceText, width / 2, bannerHeight / 2);
       
-      // Converter canvas para buffer
-      const bannerBuffer = canvas.toBuffer('image/png');
+      // Converter canvas para buffer PNG
+      const bannerBuffer = await canvas.encode('png');
       
       // Compor imagem original com faixa de preço
       await sharp(buffer)
@@ -1401,8 +1401,8 @@ app.patch('/showcase/:id', async (req: any, reply) => {
       ctx.fillStyle = '#FFD700';
       ctx.fillText(priceText, width / 2, bannerHeight / 2);
       
-      // Converter canvas para buffer
-      const bannerBuffer = canvas.toBuffer('image/png');
+      // Converter canvas para buffer PNG
+      const bannerBuffer = await canvas.encode('png');
       
       // Compor imagem original com faixa de preço
       await sharp(buffer)
