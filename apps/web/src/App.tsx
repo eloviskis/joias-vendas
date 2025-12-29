@@ -2612,7 +2612,7 @@ function MostruarioPage({ token }: { token: string }) {
     console.log('shareWhatsApp chamado para item:', item);
     const price = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price);
     
-    // Montar mensagem
+    // Montar mensagem COM a URL da imagem
     let text = `💎 *VANI E ELO JOIAS*\n`;
     text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
     text += `*${item.itemName}*\n`;
@@ -2621,74 +2621,15 @@ function MostruarioPage({ token }: { token: string }) {
     text += `\n💰 *Valor: ${price}*\n`;
     text += `\n━━━━━━━━━━━━━━━━━━━━`;
     
-    const encodedText = encodeURIComponent(text);
-    
-    // Se tiver imagem
+    // Adicionar URL da imagem se existir (WhatsApp vai fazer preview automaticamente)
     if (item.imageUrl) {
-      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-      
-      if (isMobile) {
-        // Mobile: tentar Web Share API com arquivo
-        try {
-          console.log('Tentando Web Share API (mobile)...');
-          const imageUrl = item.imageUrl.startsWith('http') ? item.imageUrl : `${window.location.origin}${item.imageUrl}`;
-          const res = await fetch(imageUrl);
-          const blob = await res.blob();
-          const shareFile = new File([blob], `${item.itemName.replace(/\s+/g, '-')}.jpg`, { type: 'image/jpeg' });
-          
-          if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
-            console.log('Compartilhando via Web Share API');
-            await navigator.share({ files: [shareFile], text });
-            return;
-          }
-        } catch (err) {
-          console.warn('Web Share API falhou:', err);
-        }
-      } else {
-        // Desktop: copiar imagem para clipboard e abrir WhatsApp Web
-        try {
-          console.log('Tentando copiar imagem para clipboard (desktop)...');
-          const imageUrl = item.imageUrl.startsWith('http') ? item.imageUrl : `${window.location.origin}${item.imageUrl}`;
-          console.log('Baixando imagem de:', imageUrl);
-          const res = await fetch(imageUrl);
-          
-          if (!res.ok) {
-            throw new Error(`Erro ao baixar imagem: ${res.status} ${res.statusText}`);
-          }
-          
-          const blob = await res.blob();
-          console.log('Blob recebido:', blob.type, blob.size);
-          
-          // Tentar copiar para clipboard
-          if (navigator.clipboard && 'write' in navigator.clipboard) {
-            try {
-              const clipboardItem = new ClipboardItem({ 'image/jpeg': blob });
-              await navigator.clipboard.write([clipboardItem]);
-              console.log('Imagem copiada para clipboard com sucesso');
-              
-              // Abrir WhatsApp Web
-              if (phone) {
-                const cleanPhone = phone.replace(/\D/g, '');
-                window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
-              } else {
-                window.open(`https://web.whatsapp.com/send?text=${encodedText}`, '_blank');
-              }
-              
-              // Notificar usuário
-              alert('✅ Imagem copiada para a área de transferência!\n\nNo WhatsApp Web:\n1. Cole a imagem com Ctrl+V\n2. Envie a mensagem');
-              return;
-            } catch (clipErr) {
-              console.warn('Falhou ao copiar para clipboard:', clipErr);
-            }
-          }
-        } catch (err) {
-          console.warn('Erro preparando imagem para clipboard:', err);
-        }
-      }
+      const imageUrl = item.imageUrl.startsWith('http') ? item.imageUrl : `${window.location.origin}${item.imageUrl}`;
+      text += `\n\n${imageUrl}`;
     }
     
-    // Fallback: apenas abrir WhatsApp Web com o texto
-    console.log('Abrindo WhatsApp Web com texto (sem imagem automática)');
+    const encodedText = encodeURIComponent(text);
+    
+    // Abrir WhatsApp Web ou App com a mensagem (incluindo imagem)
     if (phone) {
       const cleanPhone = phone.replace(/\D/g, '');
       window.open(`https://web.whatsapp.com/send?phone=55${cleanPhone}&text=${encodedText}`, '_blank');
