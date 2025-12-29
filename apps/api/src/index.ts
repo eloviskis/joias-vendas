@@ -8,6 +8,7 @@ import bcrypt from 'bcryptjs';
 import cron from 'node-cron';
 import fs from 'node:fs';
 import path from 'node:path';
+import sharp from 'sharp';
 import { fileURLToPath } from 'node:url';
 import nodemailer from 'nodemailer';
 import { createProvider, WhatsAppProvider } from './whatsapp-providers.js';
@@ -1105,7 +1106,51 @@ app.post('/showcase', async (req: any, reply) => {
       const filename = `showcase-${Date.now()}.jpg`;
       const filepath = path.join(uploadsDir, filename);
       
-      fs.writeFileSync(filepath, buffer);
+      // Processar imagem com Sharp
+      const image = sharp(buffer);
+      const metadata = await image.metadata();
+      const width = metadata.width || 800;
+      const height = metadata.height || 600;
+      
+      // Altura da faixa de preço (15% da altura da imagem, mínimo 60px)
+      const bannerHeight = Math.max(60, Math.floor(height * 0.15));
+      const fontSize = Math.floor(bannerHeight * 0.5); // 50% da altura da faixa
+      
+      // Formatar o preço
+      const priceText = finalPrice 
+        ? `R$ ${finalPrice.toFixed(2).replace('.', ',')}`
+        : 'Consulte o preço';
+      
+      // Criar SVG com faixa de preço
+      const svgBanner = `
+        <svg width="${width}" height="${bannerHeight}">
+          <rect width="${width}" height="${bannerHeight}" fill="#1a1a1a" opacity="0.85"/>
+          <text
+            x="50%"
+            y="50%"
+            text-anchor="middle"
+            dominant-baseline="middle"
+            font-family="Arial, sans-serif"
+            font-size="${fontSize}"
+            font-weight="bold"
+            fill="#FFD700"
+            stroke="#000"
+            stroke-width="2"
+            paint-order="stroke"
+          >${priceText}</text>
+        </svg>
+      `;
+      
+      // Compor imagem original com faixa de preço
+      await image
+        .resize(width, height, { fit: 'cover' })
+        .composite([{
+          input: Buffer.from(svgBanner),
+          gravity: 'south'
+        }])
+        .jpeg({ quality: 90 })
+        .toFile(filepath);
+      
       imageUrl = `/uploads/${filename}`;
     } catch (error) {
       console.error('Error saving image:', error);

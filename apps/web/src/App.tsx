@@ -1,4 +1,5 @@
 import React, { useState, useEffect, Fragment } from 'react';
+import { ImageEditor } from './components/ImageEditor';
 
 // Componente Modal de Pagamento
 function PaymentModal({ installment, onConfirm, onClose }: Readonly<{ 
@@ -2256,6 +2257,7 @@ function DespesasPage({ token }: { token: string }) {
 function MostruarioPage({ token }: { token: string }) {
   const [items, setItems] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [showImageEditor, setShowImageEditor] = useState(false);
   const [photo, setPhoto] = useState('');
   const [itemName, setItemName] = useState('');
   const [itemCode, setItemCode] = useState('');
@@ -2277,14 +2279,6 @@ function MostruarioPage({ token }: { token: string }) {
     } catch (error) {
       console.error('Erro ao carregar mostruário:', error);
     }
-  };
-
-  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => setPhoto(reader.result as string);
-    reader.readAsDataURL(file);
   };
 
   const calculatePrice = () => {
@@ -2406,26 +2400,38 @@ function MostruarioPage({ token }: { token: string }) {
       </div>
 
       {/* Formulário */}
-      {showForm && (
+      {showForm && !showImageEditor && (
         <div className="bg-white rounded-xl shadow-lg p-6">
           <h3 className="text-xl font-bold text-gray-800 mb-4">📸 Cadastrar Nova Peça</h3>
           
-          {/* Captura de Foto */}
+          {/* Foto Preview ou Botão */}
           <div className="mb-4">
-            <label className="block font-semibold mb-2" htmlFor="showcase-photo">📷 Foto da Peça</label>
-            <input
-              id="showcase-photo"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handlePhotoCapture}
-              title="Capturar ou selecionar foto"
-              aria-label="Capturar ou selecionar foto da peça"
-              className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-purple-500 transition"
-            />
-            {photo && (
-              <div className="mt-3">
+            {!photo ? (
+              <button
+                onClick={() => setShowImageEditor(true)}
+                className="w-full p-6 border-2 border-dashed border-purple-500 rounded-lg hover:bg-purple-50 transition flex flex-col items-center gap-2"
+              >
+                <span className="text-4xl">📷</span>
+                <span className="font-semibold text-purple-600">Clique para adicionar foto</span>
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <label className="font-semibold">📷 Foto da Peça (com preço)</label>
+                  <button
+                    onClick={() => {
+                      setPhoto('');
+                      setShowImageEditor(true);
+                    }}
+                    className="text-blue-600 hover:text-blue-800 font-semibold"
+                  >
+                    ✏️ Editar Foto
+                  </button>
+                </div>
                 <img src={photo} alt="Preview" className="max-w-xs rounded-lg shadow-md" />
+                <p className="text-sm text-gray-600">
+                  💡 A faixa com o preço será adicionada automaticamente ao salvar
+                </p>
               </div>
             )}
           </div>
@@ -2528,6 +2534,20 @@ function MostruarioPage({ token }: { token: string }) {
               Cancelar
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Editor de Imagem */}
+      {showImageEditor && (
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h3 className="text-xl font-bold text-gray-800 mb-4">✂️ Editar Imagem</h3>
+          <ImageEditor
+            onImageReady={(base64) => {
+              setPhoto(base64);
+              setShowImageEditor(false);
+            }}
+            onCancel={() => setShowImageEditor(false)}
+          />
         </div>
       )}
 
