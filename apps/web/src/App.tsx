@@ -2232,8 +2232,11 @@ function MostruarioPage({ token }: { token: string }) {
   const [itemCode, setItemCode] = useState('');
   const [factor, setFactor] = useState('');
   const [baseValue, setBaseValue] = useState('');
+  const [priceManual, setPriceManual] = useState('');
   const [description, setDescription] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [installmentsPreview, setInstallmentsPreview] = useState(1);
+  const [roundUpPreview, setRoundUpPreview] = useState(true);
 
   useEffect(() => {
     loadItems();
@@ -2252,17 +2255,21 @@ function MostruarioPage({ token }: { token: string }) {
   };
 
   const calculatePrice = () => {
-    const f = parseFloat(factor);
-    const b = parseFloat(baseValue);
-    if (!isNaN(f) && !isNaN(b) && f > 0 && b > 0) {
-      return (f * b).toFixed(2);
+    // Se tiver preço manual, usa ele
+    if (priceManual && parseFloat(priceManual) > 0) {
+      return priceManual;
     }
-    return '0.00';
+    // Se não, calcula pelo fator (se tiver)
+    const f = parseFloat(factor);
+    if (!isNaN(f) && f > 0 && priceManual) {
+      return priceManual;
+    }
+    return priceManual || '0.00';
   };
 
   const handleSubmit = async () => {
-    if (!photo || !itemName || !factor || !baseValue) {
-      alert('Preencha foto, nome, fator e valor base');
+    if (!photo || !itemName || !priceManual) {
+      alert('Preencha foto, nome e preço final');
       return;
     }
 
@@ -2276,9 +2283,9 @@ function MostruarioPage({ token }: { token: string }) {
         body: JSON.stringify({
           itemName,
           itemCode: itemCode || null,
-          factor: parseFloat(factor),
-          baseValue: parseFloat(baseValue),
-          price: parseFloat(calculatePrice()),
+          factor: factor ? parseFloat(factor) : null,
+          baseValue: null,
+          price: parseFloat(priceManual),
           description: description || null,
           imageBase64: photo
         })
@@ -2291,7 +2298,9 @@ function MostruarioPage({ token }: { token: string }) {
         setItemCode('');
         setFactor('');
         setBaseValue('');
+        setPriceManual('');
         setDescription('');
+        setInstallmentsPreview(1);
         setShowForm(false);
         loadItems();
       } else {
@@ -2308,14 +2317,16 @@ function MostruarioPage({ token }: { token: string }) {
     setItemCode(item.itemCode || '');
     setFactor(String(item.factor || ''));
     setBaseValue(String(item.baseValue || ''));
+    setPriceManual(String(item.price || ''));
     setDescription(item.description || '');
     setPhoto(item.imageUrl || '');
+    setInstallmentsPreview(1);
     setShowForm(true);
   };
 
   const handleUpdateItem = async () => {
-    if (!itemName || !factor || !baseValue) {
-      alert('Preencha nome, fator e valor base');
+    if (!itemName || !priceManual) {
+      alert('Preencha nome e preço final');
       return;
     }
 
@@ -2323,9 +2334,9 @@ function MostruarioPage({ token }: { token: string }) {
       const body: any = {
         itemName,
         itemCode: itemCode || null,
-        factor: parseFloat(factor),
-        baseValue: parseFloat(baseValue),
-        price: parseFloat(calculatePrice()),
+        factor: factor ? parseFloat(factor) : null,
+        baseValue: null,
+        price: parseFloat(priceManual),
         description: description || null
       };
 
@@ -2351,7 +2362,9 @@ function MostruarioPage({ token }: { token: string }) {
         setItemCode('');
         setFactor('');
         setBaseValue('');
+        setPriceManual('');
         setDescription('');
+        setInstallmentsPreview(1);
         setShowForm(false);
         loadItems();
       } else {
@@ -2449,7 +2462,7 @@ function MostruarioPage({ token }: { token: string }) {
     }
   };
 
-  const shareWhatsApp = async (item: any, phone?: string) => {
+  const shareWhatsApp = async (item: any, phone?: string, numParcelas?: number) => {
     console.log('shareWhatsApp chamado para item:', item);
     const price = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price);
 
@@ -2457,8 +2470,24 @@ function MostruarioPage({ token }: { token: string }) {
     let text = `💎 VANI E ELO JOIAS\n`;
     text += `━━━━━━━━━━━━━━━━━━━━\n`;
     text += `${item.itemName || ''}\n\n`;
-    text += `💰 Valor: ${price}\n\n`;
-    text += `━━━━━━━━━━━━━━━━━━━━`;
+    text += `💰 Valor: ${price}\n`;
+    
+    // Adicionar parcelas se informado
+    if (numParcelas && numParcelas > 1 && item.price) {
+      const parcelaExata = item.price / numParcelas;
+      const parcelaArredondada = Math.ceil(parcelaExata);
+      const ultimaParcela = item.price - (parcelaArredondada * (numParcelas - 1));
+      
+      text += `\n📊 *Parcelamento:*\n`;
+      if (ultimaParcela !== parcelaArredondada) {
+        text += `${numParcelas - 1}x de R$ ${parcelaArredondada.toFixed(2)}\n`;
+        text += `+ 1x de R$ ${ultimaParcela.toFixed(2)}\n`;
+      } else {
+        text += `${numParcelas}x de R$ ${parcelaArredondada.toFixed(2)}\n`;
+      }
+    }
+    
+    text += `\n━━━━━━━━━━━━━━━━━━━━`;
 
     if (item.imageUrl) {
       const imageUrl = item.imageUrl.startsWith('http') ? item.imageUrl : `${window.location.origin}${item.imageUrl}`;
@@ -2583,12 +2612,24 @@ function MostruarioPage({ token }: { token: string }) {
             </div>
           </div>
 
-          {/* Calculadora de Preço */}
+          {/* Preço e Fator */}
           <div className="mb-4 p-4 bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-200 rounded-xl">
-            <h4 className="font-bold text-gray-800 mb-3">🧮 Calcular Preço</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <h4 className="font-bold text-gray-800 mb-3">💰 Preço</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold mb-1" htmlFor="showcase-factor">Fator</label>
+                <label className="block text-sm font-semibold mb-1" htmlFor="showcase-price">Preço Final (R$)</label>
+                <input
+                  id="showcase-price"
+                  type="number"
+                  step="0.01"
+                  placeholder="Ex: 1500.00"
+                  value={priceManual}
+                  onChange={(e) => setPriceManual(e.target.value)}
+                  className="w-full p-2 border-2 border-green-500 rounded-lg text-lg font-bold text-green-600"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1" htmlFor="showcase-factor">Fator (opcional)</label>
                 <input
                   id="showcase-factor"
                   type="number"
@@ -2599,26 +2640,108 @@ function MostruarioPage({ token }: { token: string }) {
                   className="w-full p-2 border rounded-lg"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-semibold mb-1" htmlFor="showcase-base">Valor Base (R$)</label>
+            </div>
+          </div>
+
+          {/* Preview de Parcelas */}
+          {priceManual && parseFloat(priceManual) > 0 && (
+            <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl">
+              <h4 className="font-bold text-gray-800 mb-3">📊 Simulação de Parcelas</h4>
+              
+              <div className="mb-3">
+                <label className="block text-sm font-semibold mb-1">Número de Parcelas</label>
                 <input
-                  id="showcase-base"
                   type="number"
-                  step="0.01"
-                  placeholder="Ex: 1000"
-                  value={baseValue}
-                  onChange={(e) => setBaseValue(e.target.value)}
+                  min="1"
+                  max="24"
+                  value={installmentsPreview}
+                  onChange={(e) => setInstallmentsPreview(parseInt(e.target.value) || 1)}
                   className="w-full p-2 border rounded-lg"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-semibold mb-1">Preço Final</label>
-                <div className="w-full p-2 bg-white border-2 border-green-500 rounded-lg font-bold text-green-600 text-lg">
-                  {formatCurrency(parseFloat(calculatePrice()))}
-                </div>
-              </div>
+
+              {installmentsPreview > 1 && (() => {
+                const total = parseFloat(priceManual);
+                const parcelaExata = total / installmentsPreview;
+                const parcelaArredondada = Math.ceil(parcelaExata);
+                const ultimaParcela = total - (parcelaArredondada * (installmentsPreview - 1));
+                
+                return (
+                  <>
+                    {/* Opção de Arredondamento */}
+                    <label className="flex items-center gap-3 cursor-pointer mb-3 p-3 bg-white rounded-lg border-2 border-blue-200 hover:border-blue-400 transition">
+                      <input 
+                        type="checkbox" 
+                        checked={roundUpPreview} 
+                        onChange={(e) => setRoundUpPreview(e.target.checked)}
+                        className="w-5 h-5 accent-blue-500"
+                      />
+                      <div className="flex-1">
+                        <span className="font-semibold text-blue-700">⬆️ Arredondar parcelas</span>
+                      </div>
+                    </label>
+
+                    {/* Resumo */}
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div className={`p-3 rounded-lg border-2 ${!roundUpPreview ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
+                        <p className="text-xs text-gray-500 uppercase">Valor Exato</p>
+                        <p className="font-bold text-lg text-gray-800">{installmentsPreview}x R$ {parcelaExata.toFixed(2)}</p>
+                      </div>
+                      <div className={`p-3 rounded-lg border-2 ${roundUpPreview ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
+                        <p className="text-xs text-gray-500 uppercase">Arredondado</p>
+                        <p className="font-bold text-lg text-gray-800">{installmentsPreview - 1}x R$ {parcelaArredondada.toFixed(2)}</p>
+                        <p className="text-xs text-green-600">+ 1x R$ {ultimaParcela.toFixed(2)}</p>
+                      </div>
+                    </div>
+
+                    {/* Tabela de Parcelas */}
+                    <div className="bg-white rounded-lg border overflow-hidden">
+                      <div className="bg-gray-100 px-3 py-2 border-b">
+                        <p className="text-sm font-semibold text-gray-700">📅 Cronograma</p>
+                      </div>
+                      <div className="max-h-40 overflow-y-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="text-left p-2 border-b">Parcela</th>
+                              <th className="text-left p-2 border-b">Mês</th>
+                              <th className="text-right p-2 border-b">Valor</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Array.from({ length: installmentsPreview }, (_, i) => {
+                              const vencimento = new Date();
+                              vencimento.setMonth(vencimento.getMonth() + i);
+                              const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                              const valor = roundUpPreview 
+                                ? (i === installmentsPreview - 1 ? ultimaParcela : parcelaArredondada)
+                                : parcelaExata;
+                              
+                              return (
+                                <tr key={i} className={i === installmentsPreview - 1 && roundUpPreview ? 'bg-green-50' : ''}>
+                                  <td className="p-2 border-b">
+                                    <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-semibold">
+                                      {i + 1}/{installmentsPreview}
+                                    </span>
+                                  </td>
+                                  <td className="p-2 border-b text-gray-600">
+                                    {meses[vencimento.getMonth()]}/{vencimento.getFullYear()}
+                                  </td>
+                                  <td className="p-2 border-b text-right font-semibold">
+                                    R$ {valor.toFixed(2)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
-          </div>
+          )}
 
           {/* Descrição */}
           <div className="mb-4">
@@ -2649,7 +2772,9 @@ function MostruarioPage({ token }: { token: string }) {
                 setItemCode('');
                 setFactor('');
                 setBaseValue('');
+                setPriceManual('');
                 setDescription('');
+                setInstallmentsPreview(1);
               }}
               className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-6 py-3 rounded-lg font-semibold transition"
             >
@@ -2726,16 +2851,55 @@ function MostruarioPage({ token }: { token: string }) {
                 )}
               </div>
 
+              {/* Simulação de Parcelas para Compartilhar */}
+              {item.price > 0 && (
+                <div className="bg-purple-50 p-3 rounded-lg mb-3">
+                  <label className="text-xs font-semibold text-purple-700 block mb-1">📊 Parcelas (para enviar)</label>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="number"
+                      min="1"
+                      max="24"
+                      defaultValue={1}
+                      id={`parcelas-${item.id}`}
+                      className="w-20 p-1 border rounded text-center text-sm"
+                      placeholder="1"
+                    />
+                    <span className="text-xs text-gray-500">parcelas</span>
+                    {(() => {
+                      const inputEl = document.getElementById(`parcelas-${item.id}`) as HTMLInputElement;
+                      const numParcelas = inputEl ? parseInt(inputEl.value) || 1 : 1;
+                      if (numParcelas > 1) {
+                        const valorParcela = Math.ceil(item.price / numParcelas);
+                        return <span className="text-xs text-purple-600 font-semibold">≈ R$ {valorParcela.toFixed(2)}/mês</span>;
+                      }
+                      return null;
+                    })()}
+                  </div>
+                </div>
+              )}
+
               {/* Botões de Ação */}
               <div className="flex gap-2">
                 <button
-                  onClick={() => shareWhatsApp(item)}
+                  onClick={() => {
+                    const inputEl = document.getElementById(`parcelas-${item.id}`) as HTMLInputElement;
+                    const numParcelas = inputEl ? parseInt(inputEl.value) || 1 : 1;
+                    shareWhatsApp(item, undefined, numParcelas > 1 ? numParcelas : undefined);
+                  }}
                   className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-3 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-1"
                 >
                   <span>📱</span> Abrir WhatsApp
                 </button>
                 <button
-                  onClick={() => shareToContact(item)}
+                  onClick={() => {
+                    const inputEl = document.getElementById(`parcelas-${item.id}`) as HTMLInputElement;
+                    const numParcelas = inputEl ? parseInt(inputEl.value) || 1 : 1;
+                    const phone = prompt('Digite o número do WhatsApp (com DDD):');
+                    if (phone) {
+                      shareWhatsApp(item, phone, numParcelas > 1 ? numParcelas : undefined);
+                    }
+                  }}
                   className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-3 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-1"
                 >
                   <span>👤</span> Enviar para
