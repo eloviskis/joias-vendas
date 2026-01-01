@@ -1915,31 +1915,16 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div>
-            <label className="block text-sm font-semibold mb-1 text-gray-700">Tipo</label>
-            <select 
-              className="w-full p-2 border rounded-lg"
-              value={itemType}
-              onChange={(e) => setItemType(e.target.value as 'leilao' | 'novo')}
-              title="Tipo do item"
-            >
-              <option value="leilao">🔨 Leilão</option>
-              <option value="novo">✨ Novo</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-semibold mb-1 text-gray-700">Valor Base (R$)</label>
-            <input 
-              type="number" 
-              step="0.01"
-              className="w-full p-2 border rounded-lg" 
-              placeholder="0.00" 
-              value={baseValue} 
-              onChange={(e) => setBaseValue(e.target.value)} 
-            />
-          </div>
+        <div className="mb-3">
+          <label className="block text-sm font-semibold mb-1 text-gray-700">Valor base do dia (R$)</label>
+          <input 
+            type="number" 
+            step="0.01"
+            className="w-full p-2 border rounded-lg" 
+            placeholder="0.00" 
+            value={baseValue} 
+            onChange={(e) => setBaseValue(e.target.value)} 
+          />
         </div>
 
         {factor && baseValue && (
