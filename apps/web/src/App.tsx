@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useMemo, Fragment } from 'react';
 import { ImageEditor } from './components/ImageEditor';
 
+// Versão do sistema - atualizar a cada deploy
+const APP_VERSION = '1.0.0';
+const APP_BUILD_DATE = '2026-01-01';
+
 // Componente Modal de Pagamento
 function PaymentModal({ installment, onConfirm, onClose }: Readonly<{ 
   installment: { id: number; sequence: number; amount: number; sale: { itemName: string; client?: { name: string } } };
@@ -1442,6 +1446,13 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Rodapé com Versão */}
+      <footer className="bg-gray-800 text-gray-400 text-center py-3 mt-8">
+        <p className="text-xs">
+          💎 Joias Vendas • Versão {APP_VERSION} • {APP_BUILD_DATE}
+        </p>
+      </footer>
     </div>
   );
 }
