@@ -1482,6 +1482,7 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
   const [baseValue, setBaseValue] = useState('');
   const [totalValue, setTotalValue] = useState('');
   const [installments, setInstallments] = useState(1);
+  const [discountValue, setDiscountValue] = useState('');
   const [photo, setPhoto] = useState('');
   const [sendCard, setSendCard] = useState(true);
   const [roundUpInstallments, setRoundUpInstallments] = useState(false);
@@ -1965,8 +1966,39 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
 
       <div className="mb-4">
         <label className="block font-semibold mb-2">📊 Parcelas</label>
-        <input type="number" className="w-full p-3 border rounded-lg" min="1" value={installments} onChange={(e) => setInstallments(parseInt(e.target.value))} title="Número de parcelas" placeholder="Número de parcelas" />
+        <input type="number" className="w-full p-3 border rounded-lg" min="1" value={installments} onChange={(e) => { setInstallments(parseInt(e.target.value)); if (parseInt(e.target.value) > 1) setDiscountValue(''); }} title="Número de parcelas" placeholder="Número de parcelas" />
       </div>
+
+      {/* Campo de Desconto à Vista */}
+      {installments === 1 && totalValue && parseFloat(totalValue) > 0 && (
+        <div className="mb-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl">
+          <h4 className="font-bold text-green-800 mb-3 flex items-center gap-2">
+            💵 Pagamento à Vista
+          </h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold mb-1 text-green-700">Desconto (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={discountValue}
+                onChange={(e) => setDiscountValue(e.target.value)}
+                className="w-full p-2 border-2 border-green-400 rounded-lg text-lg font-bold text-green-600"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold mb-1 text-green-700">Valor Final</label>
+              <div className="w-full p-2 bg-white border-2 border-green-500 rounded-lg text-lg font-bold text-green-600">
+                R$ {(parseFloat(totalValue) - (parseFloat(discountValue) || 0)).toFixed(2)}
+              </div>
+            </div>
+          </div>
+          {discountValue && parseFloat(discountValue) > 0 && (
+            <p className="text-xs text-green-600 mt-2">✅ Desconto de R$ {parseFloat(discountValue).toFixed(2)} aplicado para pagamento à vista</p>
+          )}
+        </div>
+      )}
 
       {/* Preview das Parcelas com Opção de Arredondamento */}
       {installments > 1 && totalValue && parseFloat(totalValue) > 0 && (() => {
@@ -2279,8 +2311,8 @@ function MostruarioPage({ token }: { token: string }) {
   };
 
   const handleSubmit = async () => {
-    if (!photo || !itemName || !priceManual) {
-      alert('Preencha foto, nome e preço final');
+    if (!photo || !itemName || !factor) {
+      alert('Preencha foto, nome e fator');
       return;
     }
 
@@ -2294,9 +2326,9 @@ function MostruarioPage({ token }: { token: string }) {
         body: JSON.stringify({
           itemName,
           itemCode: itemCode || null,
-          factor: factor ? parseFloat(factor) : null,
+          factor: parseFloat(factor),
           baseValue: null,
-          price: parseFloat(priceManual),
+          price: null,
           description: description || null,
           imageBase64: photo
         })
@@ -2336,8 +2368,8 @@ function MostruarioPage({ token }: { token: string }) {
   };
 
   const handleUpdateItem = async () => {
-    if (!itemName || !priceManual) {
-      alert('Preencha nome e preço final');
+    if (!itemName || !factor) {
+      alert('Preencha nome e fator');
       return;
     }
 
@@ -2345,9 +2377,9 @@ function MostruarioPage({ token }: { token: string }) {
       const body: any = {
         itemName,
         itemCode: itemCode || null,
-        factor: factor ? parseFloat(factor) : null,
+        factor: parseFloat(factor),
         baseValue: null,
-        price: parseFloat(priceManual),
+        price: null,
         description: description || null
       };
 
@@ -2475,27 +2507,15 @@ function MostruarioPage({ token }: { token: string }) {
 
   const shareWhatsApp = async (item: any, phone?: string, numParcelas?: number) => {
     console.log('shareWhatsApp chamado para item:', item);
-    const price = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price);
 
     // Montar mensagem com link da imagem para gerar miniatura automática
     let text = `💎 VANI E ELO JOIAS\n`;
     text += `━━━━━━━━━━━━━━━━━━━━\n`;
     text += `${item.itemName || ''}\n\n`;
-    text += `💰 Valor: ${price}\n`;
     
-    // Adicionar parcelas se informado
-    if (numParcelas && numParcelas > 1 && item.price) {
-      const parcelaExata = item.price / numParcelas;
-      const parcelaArredondada = Math.ceil(parcelaExata);
-      const ultimaParcela = item.price - (parcelaArredondada * (numParcelas - 1));
-      
-      text += `\n📊 *Parcelamento:*\n`;
-      if (ultimaParcela !== parcelaArredondada) {
-        text += `${numParcelas - 1}x de R$ ${parcelaArredondada.toFixed(2)}\n`;
-        text += `+ 1x de R$ ${ultimaParcela.toFixed(2)}\n`;
-      } else {
-        text += `${numParcelas}x de R$ ${parcelaArredondada.toFixed(2)}\n`;
-      }
+    // Mostrar fator se disponível (novo formato)
+    if (item.factor) {
+      text += `🔢 Fator: ${item.factor}\n`;
     }
     
     text += `\n━━━━━━━━━━━━━━━━━━━━`;
@@ -2623,136 +2643,23 @@ function MostruarioPage({ token }: { token: string }) {
             </div>
           </div>
 
-          {/* Preço e Fator */}
-          <div className="mb-4 p-4 bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-200 rounded-xl">
-            <h4 className="font-bold text-gray-800 mb-3">💰 Preço</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold mb-1" htmlFor="showcase-price">Preço Final (R$)</label>
-                <input
-                  id="showcase-price"
-                  type="number"
-                  step="0.01"
-                  placeholder="Ex: 1500.00"
-                  value={priceManual}
-                  onChange={(e) => setPriceManual(e.target.value)}
-                  className="w-full p-2 border-2 border-green-500 rounded-lg text-lg font-bold text-green-600"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold mb-1" htmlFor="showcase-factor">Fator (opcional)</label>
-                <input
-                  id="showcase-factor"
-                  type="number"
-                  step="0.01"
-                  placeholder="Ex: 2.5"
-                  value={factor}
-                  onChange={(e) => setFactor(e.target.value)}
-                  className="w-full p-2 border rounded-lg"
-                />
-              </div>
+          {/* Fator */}
+          <div className="mb-4 p-4 bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-xl">
+            <h4 className="font-bold text-gray-800 mb-3">🔢 Fator</h4>
+            <div>
+              <label className="block text-sm font-semibold mb-1" htmlFor="showcase-factor">Fator da Peça</label>
+              <input
+                id="showcase-factor"
+                type="number"
+                step="0.01"
+                placeholder="Ex: 2.5"
+                value={factor}
+                onChange={(e) => setFactor(e.target.value)}
+                className="w-full p-3 border-2 border-yellow-400 rounded-lg text-xl font-bold text-yellow-700"
+              />
+              <p className="text-xs text-gray-500 mt-1">Este fator será exibido na tarja da imagem</p>
             </div>
           </div>
-
-          {/* Preview de Parcelas */}
-          {priceManual && parseFloat(priceManual) > 0 && (
-            <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl">
-              <h4 className="font-bold text-gray-800 mb-3">📊 Simulação de Parcelas</h4>
-              
-              <div className="mb-3">
-                <label className="block text-sm font-semibold mb-1">Número de Parcelas</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="24"
-                  value={installmentsPreview}
-                  onChange={(e) => setInstallmentsPreview(parseInt(e.target.value) || 1)}
-                  className="w-full p-2 border rounded-lg"
-                />
-              </div>
-
-              {installmentsPreview > 1 && (() => {
-                const total = parseFloat(priceManual);
-                const parcelaExata = total / installmentsPreview;
-                const parcelaArredondada = Math.ceil(parcelaExata);
-                const ultimaParcela = total - (parcelaArredondada * (installmentsPreview - 1));
-                
-                return (
-                  <>
-                    {/* Opção de Arredondamento */}
-                    <label className="flex items-center gap-3 cursor-pointer mb-3 p-3 bg-white rounded-lg border-2 border-blue-200 hover:border-blue-400 transition">
-                      <input 
-                        type="checkbox" 
-                        checked={roundUpPreview} 
-                        onChange={(e) => setRoundUpPreview(e.target.checked)}
-                        className="w-5 h-5 accent-blue-500"
-                      />
-                      <div className="flex-1">
-                        <span className="font-semibold text-blue-700">⬆️ Arredondar parcelas</span>
-                      </div>
-                    </label>
-
-                    {/* Resumo */}
-                    <div className="grid grid-cols-2 gap-3 mb-3">
-                      <div className={`p-3 rounded-lg border-2 ${!roundUpPreview ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
-                        <p className="text-xs text-gray-500 uppercase">Valor Exato</p>
-                        <p className="font-bold text-lg text-gray-800">{installmentsPreview}x R$ {parcelaExata.toFixed(2)}</p>
-                      </div>
-                      <div className={`p-3 rounded-lg border-2 ${roundUpPreview ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
-                        <p className="text-xs text-gray-500 uppercase">Arredondado</p>
-                        <p className="font-bold text-lg text-gray-800">{installmentsPreview - 1}x R$ {parcelaArredondada.toFixed(2)}</p>
-                        <p className="text-xs text-green-600">+ 1x R$ {ultimaParcela.toFixed(2)}</p>
-                      </div>
-                    </div>
-
-                    {/* Tabela de Parcelas */}
-                    <div className="bg-white rounded-lg border overflow-hidden">
-                      <div className="bg-gray-100 px-3 py-2 border-b">
-                        <p className="text-sm font-semibold text-gray-700">📅 Cronograma</p>
-                      </div>
-                      <div className="max-h-40 overflow-y-auto">
-                        <table className="w-full text-sm">
-                          <thead className="bg-gray-50 sticky top-0">
-                            <tr>
-                              <th className="text-left p-2 border-b">Parcela</th>
-                              <th className="text-left p-2 border-b">Mês</th>
-                              <th className="text-right p-2 border-b">Valor</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {Array.from({ length: installmentsPreview }, (_, i) => {
-                              const vencimento = new Date();
-                              vencimento.setMonth(vencimento.getMonth() + i);
-                              const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-                              const valor = roundUpPreview 
-                                ? (i === installmentsPreview - 1 ? ultimaParcela : parcelaArredondada)
-                                : parcelaExata;
-                              
-                              return (
-                                <tr key={i} className={i === installmentsPreview - 1 && roundUpPreview ? 'bg-green-50' : ''}>
-                                  <td className="p-2 border-b">
-                                    <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-semibold">
-                                      {i + 1}/{installmentsPreview}
-                                    </span>
-                                  </td>
-                                  <td className="p-2 border-b text-gray-600">
-                                    {meses[vencimento.getMonth()]}/{vencimento.getFullYear()}
-                                  </td>
-                                  <td className="p-2 border-b text-right font-semibold">
-                                    R$ {valor.toFixed(2)}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          )}
 
           {/* Descrição */}
           <div className="mb-4">
@@ -2830,6 +2737,12 @@ function MostruarioPage({ token }: { token: string }) {
                   alt={item.itemName}
                   className="w-full h-full object-cover"
                 />
+                {/* Tarja com Fator */}
+                {item.factor && (
+                  <div className="absolute top-3 right-3 bg-yellow-500 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg">
+                    Fator: {item.factor}
+                  </div>
+                )}
                 {item.sold && (
                   <div className="absolute top-3 left-3 bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold shadow">
                     VENDIDA
@@ -2853,64 +2766,23 @@ function MostruarioPage({ token }: { token: string }) {
                 <p className="text-sm text-gray-600 mb-3">{item.description}</p>
               )}
               
-              <div className="bg-green-50 p-3 rounded-lg mb-3">
-                {(item.factor && item.baseValue) && (
-                  <p className="text-xs text-gray-600">Fator: {item.factor} × Base: {formatCurrency(item.baseValue)}</p>
-                )}
-                {item.price != null && (
-                  <p className="text-xl font-bold text-green-600 mt-1">{formatCurrency(item.price)}</p>
-                )}
-              </div>
-
-              {/* Simulação de Parcelas para Compartilhar */}
-              {item.price > 0 && (
-                <div className="bg-purple-50 p-3 rounded-lg mb-3">
-                  <label className="text-xs font-semibold text-purple-700 block mb-1">📊 Parcelas (para enviar)</label>
-                  <div className="flex gap-2 items-center">
-                    <input
-                      type="number"
-                      min="1"
-                      max="24"
-                      defaultValue={1}
-                      id={`parcelas-${item.id}`}
-                      className="w-20 p-1 border rounded text-center text-sm"
-                      placeholder="1"
-                    />
-                    <span className="text-xs text-gray-500">parcelas</span>
-                    {(() => {
-                      const inputEl = document.getElementById(`parcelas-${item.id}`) as HTMLInputElement;
-                      const numParcelas = inputEl ? parseInt(inputEl.value) || 1 : 1;
-                      if (numParcelas > 1) {
-                        const valorParcela = Math.ceil(item.price / numParcelas);
-                        return <span className="text-xs text-purple-600 font-semibold">≈ R$ {valorParcela.toFixed(2)}/mês</span>;
-                      }
-                      return null;
-                    })()}
-                  </div>
+              {/* Exibe fator em destaque */}
+              {item.factor && (
+                <div className="bg-yellow-50 p-3 rounded-lg mb-3 border-2 border-yellow-300">
+                  <p className="text-lg font-bold text-yellow-700">🔢 Fator: {item.factor}</p>
                 </div>
               )}
 
               {/* Botões de Ação */}
               <div className="flex gap-2">
                 <button
-                  onClick={() => {
-                    const inputEl = document.getElementById(`parcelas-${item.id}`) as HTMLInputElement;
-                    const numParcelas = inputEl ? parseInt(inputEl.value) || 1 : 1;
-                    shareWhatsApp(item, undefined, numParcelas > 1 ? numParcelas : undefined);
-                  }}
+                  onClick={() => shareWhatsApp(item)}
                   className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-3 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-1"
                 >
                   <span>📱</span> Abrir WhatsApp
                 </button>
                 <button
-                  onClick={() => {
-                    const inputEl = document.getElementById(`parcelas-${item.id}`) as HTMLInputElement;
-                    const numParcelas = inputEl ? parseInt(inputEl.value) || 1 : 1;
-                    const phone = prompt('Digite o número do WhatsApp (com DDD):');
-                    if (phone) {
-                      shareWhatsApp(item, phone, numParcelas > 1 ? numParcelas : undefined);
-                    }
-                  }}
+                  onClick={() => shareToContact(item)}
                   className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-3 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-1"
                 >
                   <span>👤</span> Enviar para
