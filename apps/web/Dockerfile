@@ -1,5 +1,5 @@
 FROM node:22-slim AS build
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+ARG GIT_HASH=dev
 WORKDIR /app
 COPY package*.json ./
 RUN npm install

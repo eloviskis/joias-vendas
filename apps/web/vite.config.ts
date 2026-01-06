@@ -1,18 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { execSync } from 'child_process';
 
 const now = new Date();
 const buildDateStr = now.toISOString().split('T')[0];
 const buildTimeStr = now.toTimeString().split(' ')[0];
 
-// Pegar o hash curto do commit atual do Git
-let gitHash = 'dev';
-try {
-  gitHash = execSync('git rev-parse --short HEAD').toString().trim();
-} catch (e) {
-  console.warn('Git não disponível, usando hash "dev"');
-}
+// Usar GIT_HASH do argumento do Docker build, ou fallback para 'dev'
+const gitHash = process.env.GIT_HASH || 'dev';
 
 // Versão no formato: v1.0.0-YYYYMMDD-HHMM-githash
 const versionCode = `${buildDateStr.replace(/-/g, '')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}-${gitHash}`;
