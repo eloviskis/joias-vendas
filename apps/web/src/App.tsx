@@ -1487,6 +1487,7 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
   const [sendCard, setSendCard] = useState(true);
   const [roundUpInstallments, setRoundUpInstallments] = useState(false);
   const [customInstallmentValues, setCustomInstallmentValues] = useState<number[]>([]);
+  const [sellerName, setSellerName] = useState('');
 
   // Carregar produtos do mostruário
   useEffect(() => {
@@ -1624,7 +1625,8 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
           customInstallmentValues: customInstallmentValues.length === installments ? customInstallmentValues : null,
           saleDate: new Date(),
           imageBase64: photo,
-          sendCard: sendCard && installments > 1
+          sendCard: sendCard && installments > 1,
+          sellerName: sellerName || null
         })
       });
       
@@ -1676,6 +1678,7 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
         setClientCity('');
         setClientAddress('');
         setClientBillingAddress('');
+        setSellerName('');
       } else {
         const error = await res.json();
         alert('Erro ao registrar venda: ' + (error.message || 'Erro desconhecido'));
@@ -1836,6 +1839,19 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
             </button>
           </div>
         )}
+      </div>
+
+      {/* Campo de Vendedora */}
+      <div className="mb-6 p-4 bg-pink-50 border-2 border-pink-200 rounded-xl">
+        <label className="block font-bold text-pink-800 mb-2">💅 Nome da Vendedora</label>
+        <input 
+          type="text" 
+          className="w-full p-3 border-2 border-pink-300 rounded-lg focus:border-pink-500 focus:outline-none" 
+          placeholder="Digite o nome da vendedora..." 
+          value={sellerName} 
+          onChange={(e) => setSellerName(e.target.value)} 
+        />
+        <p className="text-xs text-pink-600 mt-1">Este nome aparecerá em todos os relatórios e na relação de cobrança</p>
       </div>
 
       <div className="mb-4">
@@ -3388,39 +3404,59 @@ function CobrancaPage({ token }: { token: string }) {
   const filteredSales = sales.filter((sale: any) => (sale.installmentsR || [])
     .some((i: any) => !i.paid && new Date(i.dueDate) >= start && new Date(i.dueDate) <= end));
 
-  // Agrupar vendas por cliente
-  const groupedByClient = filteredSales.reduce((acc: any, sale: any) => {
+  // Agrupar vendas por vendedora, depois por cliente
+  const groupedBySeller = filteredSales.reduce((acc: any, sale: any) => {
+    const sellerKey = sale.sellerName || 'Sem vendedora';
     const clientId = sale.client?.id || 0;
-    if (!acc[clientId]) {
-      acc[clientId] = {
+    
+    if (!acc[sellerKey]) {
+      acc[sellerKey] = {};
+    }
+    
+    if (!acc[sellerKey][clientId]) {
+      acc[sellerKey][clientId] = {
         client: sale.client,
         sales: []
       };
     }
-    acc[clientId].sales.push(sale);
+    
+    acc[sellerKey][clientId].sales.push(sale);
     return acc;
   }, {});
 
-  // Ordenar clientes alfabeticamente
-  const sortedGroups = Object.values(groupedByClient).sort((a: any, b: any) => {
-    const nameA = (a.client?.name || '').toUpperCase();
-    const nameB = (b.client?.name || '').toUpperCase();
-    return nameA.localeCompare(nameB, 'pt-BR');
-  });
+  // Ordenar vendedoras, e dentro de cada vendedora ordenar clientes
+  const sortedBySellerAndClient = Object.entries(groupedBySeller)
+    .sort((a: any, b: any) => {
+      const sellerA = a[0].toUpperCase();
+      const sellerB = b[0].toUpperCase();
+      return sellerA.localeCompare(sellerB, 'pt-BR');
+    })
+    .map((entry: any) => ({
+      seller: entry[0],
+      clients: Object.values(entry[1]).sort((a: any, b: any) => {
+        const nameA = (a.client?.name || '').toUpperCase();
+        const nameB = (b.client?.name || '').toUpperCase();
+        return nameA.localeCompare(nameB, 'pt-BR');
+      })
+    }));
 
   const generateReportText = () => {
     let text = '🧾 Relação de Cobrança\n';
     text += `Período: ${selectedMonth}\n`;
-    sortedGroups.forEach((group: any) => {
-      const address = group.client?.billingAddress || group.client?.address || group.client?.city || 'Sem endereço';
-      text += `\n👤 ${group.client?.name || 'Cliente'}\n`;
-      text += `📍 Cobrança: ${address}\n`;
-      group.sales.forEach((sale: any) => {
-        const paid = (sale.installmentsR || []).filter((i: any) => i.paid).reduce((s: number, i: any) => s + i.amount, 0);
-        const pendingInst = monthInstallment(sale, start, end) || nextInstallment(sale);
-        text += `  💎 ${sale.itemName}\n`;
-        if (pendingInst) text += `  💵 Próx: ${formatCurrency(pendingInst.amount)} venc. ${formatDate(pendingInst.dueDate)}\n`;
-        text += `  ✅ Pago: ${formatCurrency(paid)} / Total: ${formatCurrency(sale.totalValue)}\n`;
+    sortedBySellerAndClient.forEach((sellerGroup: any) => {
+      text += `\n💅 VENDEDORA: ${sellerGroup.seller}\n`;
+      text += `${'='.repeat(40)}\n`;
+      sellerGroup.clients.forEach((group: any) => {
+        const address = group.client?.billingAddress || group.client?.address || group.client?.city || 'Sem endereço';
+        text += `\n👤 ${group.client?.name || 'Cliente'}\n`;
+        text += `📍 Cobrança: ${address}\n`;
+        group.sales.forEach((sale: any) => {
+          const paid = (sale.installmentsR || []).filter((i: any) => i.paid).reduce((s: number, i: any) => s + i.amount, 0);
+          const pendingInst = monthInstallment(sale, start, end) || nextInstallment(sale);
+          text += `  💎 ${sale.itemName}\n`;
+          if (pendingInst) text += `  💵 Próx: ${formatCurrency(pendingInst.amount)} venc. ${formatDate(pendingInst.dueDate)}\n`;
+          text += `  ✅ Pago: ${formatCurrency(paid)} / Total: ${formatCurrency(sale.totalValue)}\n`;
+        });
       });
     });
     return text;
@@ -3440,24 +3476,35 @@ function CobrancaPage({ token }: { token: string }) {
   const handlePrint = () => {
     const win = window.open('', '_blank');
     if (!win) return;
-    const rows = Object.values(groupedByClient).map((group: any) => {
-      const address = group.client?.billingAddress || group.client?.address || group.client?.city || 'Sem endereço';
-      const clientRows = group.sales.map((sale: any, idx: number) => {
-        const paid = (sale.installmentsR || []).filter((i: any) => i.paid).reduce((s: number, i: any) => s + i.amount, 0);
-        const pending = sale.totalValue - paid;
-        const pct = Math.max(0, Math.min(100, (paid / sale.totalValue) * 100));
-        const next = monthInstallment(sale, start, end) || nextInstallment(sale);
-        return `<tr>
-          <td>${idx === 0 ? `<strong>${group.client?.name || ''}</strong><br><small>${address}</small>` : ''}</td>
-          <td>${sale.itemName}</td>
-          <td>${next ? formatCurrency(next.amount) + '<br><small>venc. ' + formatDate(next.dueDate) + '</small>' : '-'}</td>
-          <td>${formatCurrency(paid)}</td>
-          <td>${formatCurrency(sale.totalValue)}</td>
-          <td>${formatCurrency(pending)}<br><small>${pct.toFixed(0)}% pago</small></td>
-        </tr>`;
-      }).join('');
-      return clientRows;
-    }).join('');
+    
+    let rows = '';
+    sortedBySellerAndClient.forEach((sellerGroup: any) => {
+      // Cabeçalho da vendedora
+      rows += `<tr style="background: #f0f0f0;">
+        <td colspan="6" style="font-weight: bold; padding: 12px; border-top: 2px solid #999;">
+          💅 VENDEDORA: ${sellerGroup.seller}
+        </td>
+      </tr>`;
+      
+      sellerGroup.clients.forEach((group: any) => {
+        const address = group.client?.billingAddress || group.client?.address || group.client?.city || 'Sem endereço';
+        const clientRows = group.sales.map((sale: any, idx: number) => {
+          const paid = (sale.installmentsR || []).filter((i: any) => i.paid).reduce((s: number, i: any) => s + i.amount, 0);
+          const pending = sale.totalValue - paid;
+          const pct = Math.max(0, Math.min(100, (paid / sale.totalValue) * 100));
+          const next = monthInstallment(sale, start, end) || nextInstallment(sale);
+          return `<tr>
+            <td>${idx === 0 ? `<strong>${group.client?.name || ''}</strong><br><small>${address}</small>` : ''}</td>
+            <td>${sale.itemName}</td>
+            <td>${next ? formatCurrency(next.amount) + '<br><small>venc. ' + formatDate(next.dueDate) + '</small>' : '-'}</td>
+            <td>${formatCurrency(paid)}</td>
+            <td>${formatCurrency(sale.totalValue)}</td>
+            <td>${formatCurrency(pending)}<br><small>${pct.toFixed(0)}% pago</small></td>
+          </tr>`;
+        }).join('');
+        rows += clientRows;
+      });
+    });
 
     win.document.write(`<!doctype html><html><head><title>Relação de Cobrança - Detalhada</title><style>
       body { font-family: Arial, sans-serif; padding: 20px; }
@@ -3479,24 +3526,35 @@ function CobrancaPage({ token }: { token: string }) {
   const handlePrintSummary = () => {
     const win = window.open('', '_blank');
     if (!win) return;
-    const rows = sortedGroups.map((group: any) => {
-      const address = group.client?.billingAddress || group.client?.address || group.client?.city || 'Sem endereço';
-      // Somar todas as parcelas pendentes do período para este cliente
-      let totalToReceive = 0;
-      group.sales.forEach((sale: any) => {
-        const pendingInPeriod = (sale.installmentsR || [])
-          .filter((i: any) => !i.paid && new Date(i.dueDate) >= start && new Date(i.dueDate) <= end)
-          .reduce((sum: number, inst: any) => sum + inst.amount, 0);
-        totalToReceive += pendingInPeriod;
-      });
-      
-      return `<tr>
-        <td><strong>${group.client?.name || ''}</strong></td>
-        <td>${address}</td>
-        <td style="text-align: right;"><strong>${formatCurrency(totalToReceive)}</strong></td>
-        <td style="min-height: 60px; border: 1px solid #999;">&nbsp;</td>
+    
+    let rows = '';
+    sortedBySellerAndClient.forEach((sellerGroup: any) => {
+      // Cabeçalho da vendedora
+      rows += `<tr style="background: #f0f0f0;">
+        <td colspan="4" style="font-weight: bold; padding: 12px; border-top: 2px solid #999;">
+          💅 VENDEDORA: ${sellerGroup.seller}
+        </td>
       </tr>`;
-    }).join('');
+      
+      sellerGroup.clients.forEach((group: any) => {
+        const address = group.client?.billingAddress || group.client?.address || group.client?.city || 'Sem endereço';
+        // Somar todas as parcelas pendentes do período para este cliente
+        let totalToReceive = 0;
+        group.sales.forEach((sale: any) => {
+          const pendingInPeriod = (sale.installmentsR || [])
+            .filter((i: any) => !i.paid && new Date(i.dueDate) >= start && new Date(i.dueDate) <= end)
+            .reduce((sum: number, inst: any) => sum + inst.amount, 0);
+          totalToReceive += pendingInPeriod;
+        });
+        
+        rows += `<tr>
+          <td><strong>${group.client?.name || ''}</strong></td>
+          <td>${address}</td>
+          <td style="text-align: right;"><strong>${formatCurrency(totalToReceive)}</strong></td>
+          <td style="min-height: 60px; border: 1px solid #999;">&nbsp;</td>
+        </tr>`;
+      });
+    });
 
     win.document.write(`<!doctype html><html><head><title>Relação de Cobrança - Resumida</title><style>
       body { font-family: Arial, sans-serif; padding: 20px; }
@@ -3585,46 +3643,57 @@ function CobrancaPage({ token }: { token: string }) {
               </tr>
             </thead>
             <tbody>
-              {sortedGroups.map((group: any) => {
-                const address = group.client?.billingAddress || group.client?.address || group.client?.city || 'Sem endereço';
-                return (
-                  <Fragment key={group.client?.id || 0}>
-                    {group.sales.map((sale: any, idx: number) => {
-                      const paid = (sale.installmentsR || []).filter((i: any) => i.paid).reduce((s: number, i: any) => s + i.amount, 0);
-                      const pending = sale.totalValue - paid;
-                      const pct = Math.max(0, Math.min(100, (paid / sale.totalValue) * 100));
-                      const next = monthInstallment(sale, start, end) || nextInstallment(sale);
-                      return (
-                        <tr key={sale.id} className="border-b hover:bg-gray-50">
-                          <td className="p-2 align-top">
-                            {idx === 0 ? (
-                              <div>
-                                <div className="font-bold text-gray-800">{group.client?.name}</div>
-                                <div className="text-xs text-gray-600 mt-1">📍 {address}</div>
-                              </div>
-                            ) : null}
-                          </td>
-                          <td className="p-2 text-gray-700">{sale.itemName}</td>
-                          <td className="p-2 text-gray-700">
-                            {next ? (
-                              <div>
-                                <div className="font-semibold text-green-700">{formatCurrency(next.amount)}</div>
-                                <div className="text-xs text-gray-500">Venc: {formatDate(next.dueDate)}</div>
-                              </div>
-                            ) : <span className="text-gray-400">-</span>}
-                          </td>
-                          <td className="p-2 text-right text-green-700 font-semibold">{formatCurrency(paid)}</td>
-                          <td className="p-2 text-right text-gray-800 font-semibold">{formatCurrency(sale.totalValue)}</td>
-                          <td className="p-2 text-right text-orange-700 font-semibold">
-                            {formatCurrency(pending)}
-                            <div className="text-xs text-gray-500">{pct.toFixed(0)}% recebido</div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </Fragment>
-                );
-              })}
+              {sortedBySellerAndClient.map((sellerGroup: any) => (
+                <Fragment key={sellerGroup.seller}>
+                  {/* Cabeçalho da vendedora */}
+                  <tr className="bg-pink-50 border-b-2 border-pink-300">
+                    <td colSpan={6} className="p-3 font-bold text-pink-800">
+                      💅 VENDEDORA: {sellerGroup.seller}
+                    </td>
+                  </tr>
+                  {/* Clientes dessa vendedora */}
+                  {sellerGroup.clients.map((group: any) => {
+                    const address = group.client?.billingAddress || group.client?.address || group.client?.city || 'Sem endereço';
+                    return (
+                      <Fragment key={group.client?.id || 0}>
+                        {group.sales.map((sale: any, idx: number) => {
+                          const paid = (sale.installmentsR || []).filter((i: any) => i.paid).reduce((s: number, i: any) => s + i.amount, 0);
+                          const pending = sale.totalValue - paid;
+                          const pct = Math.max(0, Math.min(100, (paid / sale.totalValue) * 100));
+                          const next = monthInstallment(sale, start, end) || nextInstallment(sale);
+                          return (
+                            <tr key={sale.id} className="border-b hover:bg-gray-50">
+                              <td className="p-2 align-top">
+                                {idx === 0 ? (
+                                  <div>
+                                    <div className="font-bold text-gray-800">{group.client?.name}</div>
+                                    <div className="text-xs text-gray-600 mt-1">📍 {address}</div>
+                                  </div>
+                                ) : null}
+                              </td>
+                              <td className="p-2 text-gray-700">{sale.itemName}</td>
+                              <td className="p-2 text-gray-700">
+                                {next ? (
+                                  <div>
+                                    <div className="font-semibold text-green-700">{formatCurrency(next.amount)}</div>
+                                    <div className="text-xs text-gray-500">Venc: {formatDate(next.dueDate)}</div>
+                                  </div>
+                                ) : <span className="text-gray-400">-</span>}
+                              </td>
+                              <td className="p-2 text-right text-green-700 font-semibold">{formatCurrency(paid)}</td>
+                              <td className="p-2 text-right text-gray-800 font-semibold">{formatCurrency(sale.totalValue)}</td>
+                              <td className="p-2 text-right text-orange-700 font-semibold">
+                                {formatCurrency(pending)}
+                                <div className="text-xs text-gray-500">{pct.toFixed(0)}% recebido</div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </Fragment>
+                    );
+                  })}
+                </Fragment>
+              ))}
             </tbody>
           </table>
         </div>
