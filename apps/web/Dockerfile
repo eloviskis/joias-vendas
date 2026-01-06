@@ -1,5 +1,6 @@
 FROM node:22-slim AS build
 ARG GIT_HASH=dev
+ENV GIT_HASH=${GIT_HASH}
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
