@@ -448,6 +448,16 @@ export default function App() {
   const [shareModalData, setShareModalData] = useState<{ sale: any; client: any; message?: string } | null>(null);
   const [editingInstallment, setEditingInstallment] = useState<any>(null);
   const [expandedMonths, setExpandedMonths] = useState<number[]>([]);
+  
+  // Estados para criar cliente na página Clientes
+  const [showCreateClientModal, setShowCreateClientModal] = useState(false);
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientPhone, setNewClientPhone] = useState('');
+  const [newClientCpf, setNewClientCpf] = useState('');
+  const [newClientRg, setNewClientRg] = useState('');
+  const [newClientCity, setNewClientCity] = useState('');
+  const [newClientAddress, setNewClientAddress] = useState('');
+  const [newClientBillingAddress, setNewClientBillingAddress] = useState('');
 
   useEffect(() => {
     if (token && page === 'dashboard') {
@@ -763,6 +773,46 @@ export default function App() {
       }
     } catch (error) {
       alert('Erro ao deletar clientes: ' + error);
+    }
+  };
+
+  const handleCreateClient = async () => {
+    if (!newClientName || !newClientPhone) {
+      alert('Preencha pelo menos o nome e telefone do cliente');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          name: newClientName,
+          phone: newClientPhone,
+          cpf: newClientCpf || null,
+          rg: newClientRg || null,
+          city: newClientCity || null,
+          address: newClientAddress || null,
+          billingAddress: newClientBillingAddress || null
+        })
+      });
+
+      if (res.ok) {
+        alert('✅ Cliente criado com sucesso!');
+        setShowCreateClientModal(false);
+        setNewClientName('');
+        setNewClientPhone('');
+        setNewClientCpf('');
+        setNewClientRg('');
+        setNewClientCity('');
+        setNewClientAddress('');
+        setNewClientBillingAddress('');
+        loadClients();
+      } else {
+        alert('Erro ao criar cliente');
+      }
+    } catch (error) {
+      alert('Erro ao criar cliente: ' + error);
     }
   };
 
@@ -1218,7 +1268,7 @@ export default function App() {
 
         {page === 'vendas' && <NovaVendaPage token={token} onSuccess={() => setPage('dashboard')} clients={clients} />}
         {page === 'despesas' && <DespesasPage token={token} />}
-        {page === 'clientes' && <ClientesPage token={token} clients={filteredClients} clientSearch={clientSearch} handleClientSearch={handleClientSearch} handleImportClients={handleImportClients} openClientModal={openClientModal} handleDeleteAllClients={handleDeleteAllClients} />}
+        {page === 'clientes' && <ClientesPage token={token} clients={filteredClients} clientSearch={clientSearch} handleClientSearch={handleClientSearch} handleImportClients={handleImportClients} openClientModal={openClientModal} handleDeleteAllClients={handleDeleteAllClients} onCreateClient={() => setShowCreateClientModal(true)} />}
         {page === 'historico' && <HistoricoPage token={token} openClientModal={openClientModal} />}
         {page === 'cobranca' && <CobrancaPage token={token} />}
         {page === 'mostruario' && <MostruarioPage token={token} />}
@@ -1442,6 +1492,118 @@ export default function App() {
                 className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700"
               >
                 Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Criar Cliente */}
+      {showCreateClientModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">➕ Criar Novo Cliente</h3>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Nome *</label>
+                <input
+                  type="text"
+                  placeholder="Nome do cliente"
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                  value={newClientName}
+                  onChange={(e) => setNewClientName(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Telefone/WhatsApp *</label>
+                <input
+                  type="tel"
+                  placeholder="(11) 99999-9999"
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                  value={newClientPhone}
+                  onChange={(e) => setNewClientPhone(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">CPF</label>
+                <input
+                  type="text"
+                  placeholder="000.000.000-00"
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                  value={newClientCpf}
+                  onChange={(e) => setNewClientCpf(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">RG</label>
+                <input
+                  type="text"
+                  placeholder="00.000.000-0"
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                  value={newClientRg}
+                  onChange={(e) => setNewClientRg(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Cidade</label>
+                <input
+                  type="text"
+                  placeholder="São Paulo - SP"
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                  value={newClientCity}
+                  onChange={(e) => setNewClientCity(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Endereço Completo</label>
+                <textarea
+                  placeholder="Rua, número, bairro..."
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none resize-none"
+                  rows={2}
+                  value={newClientAddress}
+                  onChange={(e) => setNewClientAddress(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Endereço de Cobrança</label>
+                <textarea
+                  placeholder="Rua, número, cidade..."
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none resize-none"
+                  rows={2}
+                  value={newClientBillingAddress}
+                  onChange={(e) => setNewClientBillingAddress(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowCreateClientModal(false);
+                  setNewClientName('');
+                  setNewClientPhone('');
+                  setNewClientCpf('');
+                  setNewClientRg('');
+                  setNewClientCity('');
+                  setNewClientAddress('');
+                  setNewClientBillingAddress('');
+                }}
+                className="flex-1 bg-gray-300 text-gray-700 px-4 py-3 rounded-lg font-semibold hover:bg-gray-400 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCreateClient}
+                className="flex-1 bg-purple-600 text-white px-4 py-3 rounded-lg font-semibold hover:bg-purple-700 transition"
+              >
+                ✅ Criar Cliente
               </button>
             </div>
           </div>
@@ -2963,7 +3125,7 @@ function MostruarioPage({ token }: { token: string }) {
   );
 }
 
-function ClientesPage({ token, clients, clientSearch, handleClientSearch, handleImportClients, openClientModal, handleDeleteAllClients }: { token: string, clients: any[], clientSearch: string, handleClientSearch: any, handleImportClients: any, openClientModal: (id: number) => void, handleDeleteAllClients: any }) {
+function ClientesPage({ token, clients, clientSearch, handleClientSearch, handleImportClients, openClientModal, handleDeleteAllClients, onCreateClient }: { token: string, clients: any[], clientSearch: string, handleClientSearch: any, handleImportClients: any, openClientModal: (id: number) => void, handleDeleteAllClients: any, onCreateClient: () => void }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   const formatDate = (dateStr: string) => {
@@ -2975,6 +3137,12 @@ function ClientesPage({ token, clients, clientSearch, handleClientSearch, handle
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-800">👥 Gerenciar Clientes</h2>
         <div className="flex gap-2">
+          <button
+            onClick={onCreateClient}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-semibold"
+          >
+            ➕ Criar Cliente
+          </button>
           <label className="bg-blue-600 text-white px-4 py-2 rounded-lg cursor-pointer hover:bg-blue-700 transition">
             📥 Importar Contatos
             <input 
