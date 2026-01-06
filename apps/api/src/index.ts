@@ -265,6 +265,16 @@ app.get('/sales', async () => {
   });
 });
 
+app.get('/sales/sellers', async () => {
+  const sales = await prisma.sale.findMany({
+    select: { sellerName: true },
+    distinct: ['sellerName'],
+    where: { sellerName: { not: null } },
+    orderBy: { sellerName: 'asc' }
+  });
+  return sales.map((s: any) => s.sellerName).filter(Boolean);
+});
+
 app.delete('/sales/:id', async (req: any, reply) => {
   const id = Number(req.params.id);
   const { reason, deletedBy } = req.body || {};

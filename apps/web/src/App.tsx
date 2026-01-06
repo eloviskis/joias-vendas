@@ -1488,6 +1488,24 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
   const [roundUpInstallments, setRoundUpInstallments] = useState(false);
   const [customInstallmentValues, setCustomInstallmentValues] = useState<number[]>([]);
   const [sellerName, setSellerName] = useState('');
+  const [sellers, setSellers] = useState<string[]>([]);
+  const [showSellerSuggestions, setShowSellerSuggestions] = useState(false);
+
+  // Carregar vendedoras já usadas
+  useEffect(() => {
+    const loadSellers = async () => {
+      try {
+        const res = await fetch('/api/sales/sellers', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        setSellers(Array.isArray(data) ? data.filter((s: any) => s) : []);
+      } catch (error) {
+        console.error('Erro ao carregar vendedoras:', error);
+      }
+    };
+    loadSellers();
+  }, [token]);
 
   // Carregar produtos do mostruário
   useEffect(() => {
@@ -1844,13 +1862,46 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
       {/* Campo de Vendedora */}
       <div className="mb-6 p-4 bg-pink-50 border-2 border-pink-200 rounded-xl">
         <label className="block font-bold text-pink-800 mb-2">💅 Nome da Vendedora</label>
-        <input 
-          type="text" 
-          className="w-full p-3 border-2 border-pink-300 rounded-lg focus:border-pink-500 focus:outline-none" 
-          placeholder="Digite o nome da vendedora..." 
-          value={sellerName} 
-          onChange={(e) => setSellerName(e.target.value)} 
-        />
+        <div className="relative">
+          <input 
+            type="text" 
+            className="w-full p-3 border-2 border-pink-300 rounded-lg focus:border-pink-500 focus:outline-none" 
+            placeholder="Digite ou selecione o nome da vendedora..." 
+            value={sellerName} 
+            onChange={(e) => {
+              setSellerName(e.target.value);
+              setShowSellerSuggestions(true);
+            }}
+            onFocus={() => setShowSellerSuggestions(true)}
+            autoComplete="off"
+          />
+          {showSellerSuggestions && sellerName && sellers.filter((s) => 
+            s.toLowerCase().includes(sellerName.toLowerCase())
+          ).length > 0 && (
+            <div className="absolute z-10 w-full mt-1 border-2 border-pink-300 rounded-lg bg-white shadow-xl max-h-40 overflow-y-auto">
+              <div className="sticky top-0 bg-pink-50 px-3 py-2 border-b border-pink-200">
+                <p className="text-xs font-semibold text-pink-700">
+                  {sellers.filter((s) => s.toLowerCase().includes(sellerName.toLowerCase())).length} vendedora(s) encontrada(s)
+                </p>
+              </div>
+              {sellers
+                .filter((s) => s.toLowerCase().includes(sellerName.toLowerCase()))
+                .slice(0, 8)
+                .map((seller) => (
+                  <button
+                    key={seller}
+                    onClick={() => {
+                      setSellerName(seller);
+                      setShowSellerSuggestions(false);
+                    }}
+                    className="w-full text-left p-3 hover:bg-pink-50 border-b last:border-b-0 transition font-semibold text-pink-700"
+                  >
+                    💅 {seller}
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
         <p className="text-xs text-pink-600 mt-1">Este nome aparecerá em todos os relatórios e na relação de cobrança</p>
       </div>
 
