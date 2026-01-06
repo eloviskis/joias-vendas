@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, Fragment } from 'react';
 import { ImageEditor } from './components/ImageEditor';
 
-// Versão do sistema - atualizar a cada deploy
-const APP_VERSION = '1.0.0';
-const APP_BUILD_DATE = '2026-01-01';
+// Versão do sistema - gerada automaticamente no build
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || '0.1.0-dev';
+const APP_BUILD_DATE = import.meta.env.VITE_BUILD_DATE || new Date().toISOString().split('T')[0];
+const APP_BUILD_TIME = import.meta.env.VITE_BUILD_TIME || new Date().toTimeString().split(' ')[0];
 
 // Componente Modal de Pagamento
 function PaymentModal({ installment, onConfirm, onClose }: Readonly<{ 
@@ -1448,9 +1449,12 @@ export default function App() {
       )}
 
       {/* Rodapé com Versão */}
-      <footer className="bg-gray-800 text-gray-400 text-center py-3 mt-8">
-        <p className="text-xs">
-          💎 Joias Vendas • Versão {APP_VERSION} • {APP_BUILD_DATE}
+      <footer className="bg-gradient-to-r from-purple-900 to-blue-900 text-white text-center py-4 mt-8 border-t-2 border-purple-500">
+        <p className="text-sm font-semibold">
+          💎 Joias Vendas
+        </p>
+        <p className="text-xs mt-1 text-purple-200">
+          {APP_VERSION} • Compilado em {APP_BUILD_DATE} às {APP_BUILD_TIME}
         </p>
       </footer>
     </div>
