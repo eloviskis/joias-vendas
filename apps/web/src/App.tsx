@@ -439,6 +439,7 @@ export default function App() {
   const [allSales, setAllSales] = useState<any[]>([]);
   const [allExpenses, setAllExpenses] = useState<any[]>([]);
   const [forecastData, setForecastData] = useState<{ month: string; value: number; accumulated: number; installments?: any[] }[]>([]);
+  const [forecastDataNextYear, setForecastDataNextYear] = useState<{ month: string; value: number; accumulated: number; installments?: any[] }[]>([]);
   const [forecastYear, setForecastYear] = useState<number>(new Date().getFullYear());
   const [forecastYears, setForecastYears] = useState<number[]>([]);
   const [pendingInstallmentsAll, setPendingInstallmentsAll] = useState<any[]>([]);
@@ -484,6 +485,8 @@ export default function App() {
 
   const computeForecast = (pending: any[], year: number) => {
     const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    
+    // Calcular para o ano atual
     const forecast: { [key: string]: { value: number; installments: any[] } } = {};
     for (let i = 0; i < 12; i++) {
       forecast[`${year}-${i}`] = { value: 0, installments: [] };
@@ -512,6 +515,37 @@ export default function App() {
       });
     }
     setForecastData(forecastArray);
+    
+    // Calcular para o próximo ano
+    const forecastNext: { [key: string]: { value: number; installments: any[] } } = {};
+    const nextYear = year + 1;
+    for (let i = 0; i < 12; i++) {
+      forecastNext[`${nextYear}-${i}`] = { value: 0, installments: [] };
+    }
+
+    pending.forEach((inst: any) => {
+      const dueDate = new Date(inst.dueDate);
+      const y = dueDate.getFullYear();
+      const m = dueDate.getMonth();
+      if (y === nextYear && !inst.paid) {
+        forecastNext[`${y}-${m}`].value += inst.amount || 0;
+        forecastNext[`${y}-${m}`].installments.push(inst);
+      }
+    });
+
+    let accumulatedNext = 0;
+    const forecastArrayNext = [];
+    for (let i = 0; i < 12; i++) {
+      const monthData = forecastNext[`${nextYear}-${i}`];
+      accumulatedNext += monthData.value;
+      forecastArrayNext.push({
+        month: months[i],
+        value: monthData.value,
+        accumulated: accumulatedNext,
+        installments: monthData.installments
+      });
+    }
+    setForecastDataNextYear(forecastArrayNext);
   };
 
   const loadDashboard = async () => {
@@ -1046,149 +1080,230 @@ export default function App() {
             {forecastData.length > 0 && (
               <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                  <h2 className="text-xl font-bold text-gray-800">📅 Previsão de Recebimentos ({forecastYear})</h2>
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600" htmlFor="forecastYear">Ano:</label>
-                    <select
-                      id="forecastYear"
-                      value={forecastYear}
-                      onChange={(e) => setForecastYear(Number(e.target.value))}
-                      className="border-2 border-gray-200 rounded-lg px-3 py-1 text-sm focus:border-purple-600 focus:outline-none"
-                    >
-                      {(forecastYears.length > 0 ? forecastYears : [new Date().getFullYear()]).map((y) => (
-                        <option key={y} value={y}>{y}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <h2 className="text-xl font-bold text-gray-800">📅 Previsão de Recebimentos ({forecastYear} e {forecastYear + 1})</h2>
                 </div>
-                <p className="text-sm text-gray-600 mb-4">Parcelas pendentes a receber em cada mês</p>
+                <p className="text-sm text-gray-600 mb-4">Parcelas pendentes a receber em cada mês - Ano atual vs Próximo ano</p>
                 
-                {/* Cards de resumo */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                  <div className="bg-blue-50 p-4 rounded-lg text-center">
-                    <p className="text-xs text-gray-600">Total Previsto</p>
-                    <p className="text-lg font-bold text-blue-600">{formatCurrency(forecastData[11]?.accumulated || 0)}</p>
+                {/* Grid de duas tabelas lado a lado */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Tabela Ano Atual */}
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-800 mb-3 text-center">{forecastYear}</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-100">
+                            <th className="text-left p-2 rounded-tl-lg">Mês</th>
+                            <th className="text-center p-2">Parcelas</th>
+                            <th className="text-right p-2">A Receber</th>
+                            <th className="text-right p-2 rounded-tr-lg">Acumulado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {forecastData.map((item, index) => {
+                            const isCurrentMonth = index === new Date().getMonth() && forecastYear === new Date().getFullYear();
+                            const isPast = index < new Date().getMonth() && forecastYear === new Date().getFullYear();
+                            const expanded = expandedMonths.includes(index);
+                            const toggleExpand = () => {
+                              if (expanded) {
+                                setExpandedMonths(expandedMonths.filter(m => m !== index));
+                              } else {
+                                setExpandedMonths([...expandedMonths, index]);
+                              }
+                            };
+                            return (
+                              <Fragment key={`current-${item.month}`}>
+                                <tr 
+                                  className={`border-b cursor-pointer hover:bg-gray-50 ${isCurrentMonth ? 'bg-blue-50 font-semibold' : isPast ? 'text-gray-400' : ''}`}
+                                  onClick={() => item.installments && item.installments.length > 0 && toggleExpand()}
+                                >
+                                  <td className="p-2">
+                                    {item.installments && item.installments.length > 0 && (
+                                      <span className="mr-2">{expanded ? '▼' : '▶'}</span>
+                                    )}
+                                    {isCurrentMonth && '👉 '}{item.month}
+                                    {isCurrentMonth && <span className="text-xs ml-1 text-blue-600">(atual)</span>}
+                                  </td>
+                                  <td className="text-center p-2">
+                                    {item.installments?.length || 0}
+                                  </td>
+                                  <td className={`text-right p-2 ${item.value > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                                    {item.value > 0 ? formatCurrency(item.value) : '-'}
+                                  </td>
+                                  <td className="text-right p-2 text-blue-600 font-medium">
+                                    {formatCurrency(item.accumulated)}
+                                  </td>
+                                </tr>
+                                {expanded && item.installments && item.installments.map((inst: any) => (
+                                  <tr key={inst.id} className="bg-gray-50 text-xs">
+                                    <td className="p-2 pl-8" colSpan={2}>
+                                      <span className="font-medium">{inst.sale?.client?.name || 'Cliente'}</span>
+                                      <span className="text-gray-500 ml-2">- {inst.sale?.itemName}</span>
+                                      <span className="text-gray-400 ml-2">(Parcela {inst.sequence})</span>
+                                    </td>
+                                    <td className="p-2 text-right">
+                                      {editingInstallment?.id === inst.id ? (
+                                        <input 
+                                          type="number" 
+                                          step="0.01"
+                                          className="w-20 p-1 border rounded text-right"
+                                          defaultValue={inst.amount}
+                                          aria-label={`Editar valor da parcela ${inst.sequence}`}
+                                          title="Editar valor da parcela"
+                                          onBlur={(e) => {
+                                            handleEditInstallment(inst.id, parseFloat(e.target.value));
+                                            setEditingInstallment(null);
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              handleEditInstallment(inst.id, parseFloat((e.target as HTMLInputElement).value));
+                                              setEditingInstallment(null);
+                                            }
+                                            if (e.key === 'Escape') setEditingInstallment(null);
+                                          }}
+                                          autoFocus
+                                        />
+                                      ) : (
+                                        <span 
+                                          className="text-green-600 cursor-pointer hover:bg-green-100 px-2 py-1 rounded"
+                                          onClick={(e) => { e.stopPropagation(); setEditingInstallment(inst); }}
+                                          title="Clique para editar"
+                                        >
+                                          {formatCurrency(inst.amount)} ✏️
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="p-2 text-right text-gray-400">
+                                      {new Date(inst.dueDate).toLocaleDateString('pt-BR')}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-gradient-to-r from-green-100 to-blue-100 font-bold">
+                            <td className="p-3 rounded-bl-lg" colSpan={2}>🎯 Total</td>
+                            <td className="text-right p-3 text-green-700">
+                              {formatCurrency(forecastData.reduce((acc, item) => acc + item.value, 0))}
+                            </td>
+                            <td className="text-right p-3 text-blue-700 rounded-br-lg">
+                              {formatCurrency(forecastData[11]?.accumulated || 0)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
                   </div>
-                  <div className="bg-green-50 p-4 rounded-lg text-center">
-                    <p className="text-xs text-gray-600">Mês Atual</p>
-                    <p className="text-lg font-bold text-green-600">{formatCurrency(forecastData[new Date().getMonth()]?.value || 0)}</p>
+                  
+                  {/* Tabela Próximo Ano */}
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-800 mb-3 text-center">{forecastYear + 1}</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-100">
+                            <th className="text-left p-2 rounded-tl-lg">Mês</th>
+                            <th className="text-center p-2">Parcelas</th>
+                            <th className="text-right p-2">A Receber</th>
+                            <th className="text-right p-2 rounded-tr-lg">Acumulado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {forecastDataNextYear.map((item, index) => {
+                            const expanded = expandedMonths.includes(index + 100);
+                            const toggleExpand = () => {
+                              if (expanded) {
+                                setExpandedMonths(expandedMonths.filter(m => m !== index + 100));
+                              } else {
+                                setExpandedMonths([...expandedMonths, index + 100]);
+                              }
+                            };
+                            return (
+                              <Fragment key={`next-${item.month}`}>
+                                <tr 
+                                  className="border-b cursor-pointer hover:bg-gray-50"
+                                  onClick={() => item.installments && item.installments.length > 0 && toggleExpand()}
+                                >
+                                  <td className="p-2">
+                                    {item.installments && item.installments.length > 0 && (
+                                      <span className="mr-2">{expanded ? '▼' : '▶'}</span>
+                                    )}
+                                    {item.month}
+                                  </td>
+                                  <td className="text-center p-2">
+                                    {item.installments?.length || 0}
+                                  </td>
+                                  <td className={`text-right p-2 ${item.value > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                                    {item.value > 0 ? formatCurrency(item.value) : '-'}
+                                  </td>
+                                  <td className="text-right p-2 text-blue-600 font-medium">
+                                    {formatCurrency(item.accumulated)}
+                                  </td>
+                                </tr>
+                                {expanded && item.installments && item.installments.map((inst: any) => (
+                                  <tr key={inst.id} className="bg-gray-50 text-xs">
+                                    <td className="p-2 pl-8" colSpan={2}>
+                                      <span className="font-medium">{inst.sale?.client?.name || 'Cliente'}</span>
+                                      <span className="text-gray-500 ml-2">- {inst.sale?.itemName}</span>
+                                      <span className="text-gray-400 ml-2">(Parcela {inst.sequence})</span>
+                                    </td>
+                                    <td className="p-2 text-right">
+                                      {editingInstallment?.id === inst.id ? (
+                                        <input 
+                                          type="number" 
+                                          step="0.01"
+                                          className="w-20 p-1 border rounded text-right"
+                                          defaultValue={inst.amount}
+                                          aria-label={`Editar valor da parcela ${inst.sequence}`}
+                                          title="Editar valor da parcela"
+                                          onBlur={(e) => {
+                                            handleEditInstallment(inst.id, parseFloat(e.target.value));
+                                            setEditingInstallment(null);
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              handleEditInstallment(inst.id, parseFloat((e.target as HTMLInputElement).value));
+                                              setEditingInstallment(null);
+                                            }
+                                            if (e.key === 'Escape') setEditingInstallment(null);
+                                          }}
+                                          autoFocus
+                                        />
+                                      ) : (
+                                        <span 
+                                          className="text-green-600 cursor-pointer hover:bg-green-100 px-2 py-1 rounded"
+                                          onClick={(e) => { e.stopPropagation(); setEditingInstallment(inst); }}
+                                          title="Clique para editar"
+                                        >
+                                          {formatCurrency(inst.amount)} ✏️
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="p-2 text-right text-gray-400">
+                                      {new Date(inst.dueDate).toLocaleDateString('pt-BR')}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-gradient-to-r from-green-100 to-blue-100 font-bold">
+                            <td className="p-3 rounded-bl-lg" colSpan={2}>🎯 Total</td>
+                            <td className="text-right p-3 text-green-700">
+                              {formatCurrency(forecastDataNextYear.reduce((acc, item) => acc + item.value, 0))}
+                            </td>
+                            <td className="text-right p-3 text-blue-700 rounded-br-lg">
+                              {formatCurrency(forecastDataNextYear[11]?.accumulated || 0)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
                   </div>
-                  <div className="bg-purple-50 p-4 rounded-lg text-center">
-                    <p className="text-xs text-gray-600">Próximo Mês</p>
-                    <p className="text-lg font-bold text-purple-600">{formatCurrency(forecastData[Math.min(new Date().getMonth() + 1, 11)]?.value || 0)}</p>
-                  </div>
-                  <div className="bg-orange-50 p-4 rounded-lg text-center">
-                    <p className="text-xs text-gray-600">Média Mensal</p>
-                    <p className="text-lg font-bold text-orange-600">{formatCurrency((forecastData[11]?.accumulated || 0) / 12)}</p>
-                  </div>
-                </div>
-
-                {/* Tabela de previsão */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-gray-100">
-                        <th className="text-left p-2 rounded-tl-lg">Mês</th>
-                        <th className="text-center p-2">Parcelas</th>
-                        <th className="text-right p-2">A Receber</th>
-                        <th className="text-right p-2 rounded-tr-lg">Acumulado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {forecastData.map((item, index) => {
-                        const isCurrentMonth = index === new Date().getMonth();
-                        const isPast = index < new Date().getMonth();
-                        const expanded = expandedMonths.includes(index);
-                        const toggleExpand = () => {
-                          if (expanded) {
-                            setExpandedMonths(expandedMonths.filter(m => m !== index));
-                          } else {
-                            setExpandedMonths([...expandedMonths, index]);
-                          }
-                        };
-                        return (
-                          <Fragment key={item.month}>
-                            <tr 
-                              className={`border-b cursor-pointer hover:bg-gray-50 ${isCurrentMonth ? 'bg-blue-50 font-semibold' : isPast ? 'text-gray-400' : ''}`}
-                              onClick={() => item.installments && item.installments.length > 0 && toggleExpand()}
-                            >
-                              <td className="p-2">
-                                {item.installments && item.installments.length > 0 && (
-                                  <span className="mr-2">{expanded ? '▼' : '▶'}</span>
-                                )}
-                                {isCurrentMonth && '👉 '}{item.month}
-                                {isCurrentMonth && <span className="text-xs ml-1 text-blue-600">(atual)</span>}
-                              </td>
-                              <td className="text-center p-2">
-                                {item.installments?.length || 0}
-                              </td>
-                              <td className={`text-right p-2 ${item.value > 0 ? 'text-green-600' : 'text-gray-400'}`}>
-                                {item.value > 0 ? formatCurrency(item.value) : '-'}
-                              </td>
-                              <td className="text-right p-2 text-blue-600 font-medium">
-                                {formatCurrency(item.accumulated)}
-                              </td>
-                            </tr>
-                            {expanded && item.installments && item.installments.map((inst: any) => (
-                              <tr key={inst.id} className="bg-gray-50 text-xs">
-                                <td className="p-2 pl-8" colSpan={2}>
-                                  <span className="font-medium">{inst.sale?.client?.name || 'Cliente'}</span>
-                                  <span className="text-gray-500 ml-2">- {inst.sale?.itemName}</span>
-                                  <span className="text-gray-400 ml-2">(Parcela {inst.sequence})</span>
-                                </td>
-                                <td className="p-2 text-right">
-                                  {editingInstallment?.id === inst.id ? (
-                                    <input 
-                                      type="number" 
-                                      step="0.01"
-                                      className="w-20 p-1 border rounded text-right"
-                                      defaultValue={inst.amount}
-                                      aria-label={`Editar valor da parcela ${inst.sequence}`}
-                                      title="Editar valor da parcela"
-                                      onBlur={(e) => {
-                                        handleEditInstallment(inst.id, parseFloat(e.target.value));
-                                        setEditingInstallment(null);
-                                      }}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          handleEditInstallment(inst.id, parseFloat((e.target as HTMLInputElement).value));
-                                          setEditingInstallment(null);
-                                        }
-                                        if (e.key === 'Escape') setEditingInstallment(null);
-                                      }}
-                                      autoFocus
-                                    />
-                                  ) : (
-                                    <span 
-                                      className="text-green-600 cursor-pointer hover:bg-green-100 px-2 py-1 rounded"
-                                      onClick={(e) => { e.stopPropagation(); setEditingInstallment(inst); }}
-                                      title="Clique para editar"
-                                    >
-                                      {formatCurrency(inst.amount)} ✏️
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="p-2 text-right text-gray-400">
-                                  {new Date(inst.dueDate).toLocaleDateString('pt-BR')}
-                                </td>
-                              </tr>
-                            ))}
-                          </Fragment>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr className="bg-gradient-to-r from-green-100 to-blue-100 font-bold">
-                        <td className="p-3 rounded-bl-lg" colSpan={2}>🎯 Total do Ano</td>
-                        <td className="text-right p-3 text-green-700">
-                          {formatCurrency(forecastData.reduce((acc, item) => acc + item.value, 0))}
-                        </td>
-                        <td className="text-right p-3 text-blue-700 rounded-br-lg">
-                          {formatCurrency(forecastData[11]?.accumulated || 0)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
                 </div>
               </div>
             )}
