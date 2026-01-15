@@ -2385,14 +2385,30 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
 
       <div className="mb-4">
         <label className="block font-semibold mb-2">💰 Valor Total (R$)</label>
-        <input 
-          type="number" 
-          className="w-full p-3 border rounded-lg bg-gray-50" 
-          placeholder="0.00" 
-          value={totalValue} 
-          onChange={(e) => setTotalValue(e.target.value)}
-          title="Calculado automaticamente ou digite manualmente"
-        />
+        <div className="flex gap-2">
+          <input 
+            type="number" 
+            className="flex-1 p-3 border rounded-lg bg-gray-50" 
+            placeholder="0.00" 
+            value={totalValue} 
+            onChange={(e) => setTotalValue(e.target.value)}
+            title="Calculado automaticamente ou digite manualmente"
+          />
+          {installments === 1 && totalValue && parseFloat(totalValue) > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                const currentValue = parseFloat(totalValue);
+                const roundedValue = Math.ceil(currentValue);
+                setTotalValue(roundedValue.toString());
+              }}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition whitespace-nowrap"
+              title="Arredondar para cima"
+            >
+              ⬆️ Arredondar
+            </button>
+          )}
+        </div>
         <p className="text-xs text-gray-500 mt-1">Calculado automaticamente ou edite manualmente</p>
       </div>
 
@@ -2529,8 +2545,35 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
                             className="w-24 p-1 border rounded text-right font-mono font-semibold"
                             value={customInstallmentValues[idx]?.toFixed(2) || p.valor.toFixed(2)}
                             onChange={(e) => {
+                              const newValue = parseFloat(e.target.value) || 0;
                               const newValues = [...customInstallmentValues];
-                              newValues[idx] = parseFloat(e.target.value) || 0;
+                              newValues[idx] = newValue;
+                              
+                              // Recalcular total e redistribuir outras parcelas
+                              const totalEditado = newValues.reduce((a, b) => a + b, 0);
+                              
+                              // Redistribuir o valor nas outras parcelas (exceto a atual)
+                              const outrasParcelas = installments - 1;
+                              if (outrasParcelas > 0) {
+                                const valorRestante = totalEditado - newValue;
+                                const valorPorParcela = Math.ceil(valorRestante / outrasParcelas);
+                                
+                                for (let i = 0; i < installments; i++) {
+                                  if (i !== idx) {
+                                    if (i === installments - 1 && idx !== installments - 1) {
+                                      // Última parcela recebe o resto
+                                      const somaAteAgora = newValue + (valorPorParcela * (outrasParcelas - 1));
+                                      newValues[i] = totalEditado - somaAteAgora;
+                                    } else if (i < installments - 1 || idx === installments - 1) {
+                                      newValues[i] = valorPorParcela;
+                                    }
+                                  }
+                                }
+                              }
+                              
+                              // Atualizar total value
+                              const novoTotal = newValues.reduce((a, b) => a + b, 0);
+                              setTotalValue(novoTotal.toFixed(2));
                               setCustomInstallmentValues(newValues);
                             }}
                             title={`Editar valor da parcela ${idx + 1}`}
@@ -2545,9 +2588,35 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
                   <tfoot className="bg-gray-50">
                     <tr>
                       <td colSpan={2} className="p-2 font-semibold text-gray-700">Total</td>
-                      <td className="p-2 text-right font-bold text-green-600">
-                        R$ {customInstallmentValues.reduce((a, b) => a + b, 0).toFixed(2)}
-                        {Math.abs(customInstallmentValues.reduce((a, b) => a + b, 0) - total) > 0.01 && (
+                      <td className="p-2 text-right">
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="w-32 p-1 border-2 border-green-500 rounded text-right font-mono font-bold text-green-600"
+                          value={customInstallmentValues.length > 0 ? customInstallmentValues.reduce((a, b) => a + b, 0).toFixed(2) : total.toFixed(2)}
+                          onChange={(e) => {
+                            const novoTotal = parseFloat(e.target.value) || 0;
+                            
+                            // Redistribuir o total nas parcelas
+                            const valorPorParcela = Math.ceil(novoTotal / installments);
+                            const newValues = [];
+                            
+                            for (let i = 0; i < installments; i++) {
+                              if (i === installments - 1) {
+                                // Última parcela recebe o resto
+                                const somaAteAgora = valorPorParcela * (installments - 1);
+                                newValues[i] = novoTotal - somaAteAgora;
+                              } else {
+                                newValues[i] = valorPorParcela;
+                              }
+                            }
+                            
+                            setCustomInstallmentValues(newValues);
+                            setTotalValue(novoTotal.toFixed(2));
+                          }}
+                          title="Editar valor total - ele redistribuirá automaticamente nas parcelas"
+                        />
+                        {customInstallmentValues.length > 0 && Math.abs(customInstallmentValues.reduce((a, b) => a + b, 0) - total) > 0.01 && (
                           <span className="ml-2 text-xs text-orange-600">
                             (Diferença: R$ {(customInstallmentValues.reduce((a, b) => a + b, 0) - total).toFixed(2)})
                           </span>
