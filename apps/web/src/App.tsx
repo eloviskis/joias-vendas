@@ -1851,6 +1851,7 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
   const [photo, setPhoto] = useState('');
   const [sendCard, setSendCard] = useState(true);
   const [roundUpInstallments, setRoundUpInstallments] = useState(false);
+  const [roundUpTotal, setRoundUpTotal] = useState(false);
   const [customInstallmentValues, setCustomInstallmentValues] = useState<number[]>([]);
   const [sellerName, setSellerName] = useState('');
   const [sellers, setSellers] = useState<string[]>([]);
@@ -1914,9 +1915,11 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
     const factorNum = parseFloat(factor);
     const baseNum = parseFloat(baseValue);
     if (!isNaN(factorNum) && !isNaN(baseNum) && factorNum > 0 && baseNum > 0) {
-      setTotalValue((factorNum * baseNum).toFixed(2));
+      const calculatedValue = factorNum * baseNum;
+      const finalValue = roundUpTotal ? Math.ceil(calculatedValue) : calculatedValue;
+      setTotalValue(finalValue.toFixed(2));
     }
-  }, [factor, baseValue]);
+  }, [factor, baseValue, roundUpTotal]);
 
   const normalizedFilter = clientFilter.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
   const phoneFilter = clientFilter.replace(/\D/g, '');
@@ -2410,6 +2413,15 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
           )}
         </div>
         <p className="text-xs text-gray-500 mt-1">Calculado automaticamente ou edite manualmente</p>
+        <label className="flex items-center gap-2 mt-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={roundUpTotal}
+            onChange={(e) => setRoundUpTotal(e.target.checked)}
+            className="w-5 h-5 accent-blue-500"
+          />
+          <span className="text-sm font-semibold text-blue-700">⬆️ Arredondar valor total para cima automaticamente</span>
+        </label>
       </div>
 
       <div className="mb-4">
