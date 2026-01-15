@@ -1081,6 +1081,19 @@ export default function App() {
               <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                   <h2 className="text-xl font-bold text-gray-800">📅 Previsão de Recebimentos ({forecastYear} e {forecastYear + 1})</h2>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600" htmlFor="forecastYear">Ano:</label>
+                    <select
+                      id="forecastYear"
+                      value={forecastYear}
+                      onChange={(e) => setForecastYear(Number(e.target.value))}
+                      className="border-2 border-gray-200 rounded-lg px-3 py-1 text-sm focus:border-purple-600 focus:outline-none"
+                    >
+                      {(forecastYears.length > 0 ? forecastYears : [new Date().getFullYear()]).map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <p className="text-sm text-gray-600 mb-4">Parcelas pendentes a receber em cada mês - Ano atual vs Próximo ano</p>
                 
