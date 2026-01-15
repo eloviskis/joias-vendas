@@ -443,6 +443,42 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
   );
 }
 
+// Componente de Scroll to Top
+function ScrollToTop() {
+  const [showButton, setShowButton] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.pageYOffset > 300) {
+        setShowButton(true);
+      } else {
+        setShowButton(false);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  return (
+    <>
+      {showButton && (
+        <button
+          onClick={scrollToTop}
+          className="fixed bottom-6 right-6 bg-purple-600 text-white p-4 rounded-full shadow-lg hover:bg-purple-700 transition z-50"
+          title="Voltar ao topo"
+        >
+          ⬆️
+        </button>
+      )}
+    </>
+  );
+}
+
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [loggedEmail, setLoggedEmail] = useState(localStorage.getItem('loggedEmail') || '');
@@ -922,6 +958,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <ScrollToTop />
       <nav className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 shadow-lg">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">💎 Joias Vendas</h1>
@@ -3407,6 +3444,7 @@ function MostruarioPage({ token }: { token: string }) {
 
 function ClientesPage({ token, clients, clientSearch, handleClientSearch, handleImportClients, openClientModal, handleDeleteAllClients, onCreateClient }: { token: string, clients: any[], clientSearch: string, handleClientSearch: any, handleImportClients: any, openClientModal: (id: number) => void, handleDeleteAllClients: any, onCreateClient: () => void }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(18);
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('pt-BR');
@@ -3510,7 +3548,7 @@ function ClientesPage({ token, clients, clientSearch, handleClientSearch, handle
       {/* Lista de Clientes */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {clients.length > 0 ? (
-          clients.map((client: any) => (
+          clients.slice(0, visibleCount).map((client: any) => (
             <div 
               key={client.id} 
               className="border-2 border-gray-200 rounded-lg p-4 hover:border-purple-400 hover:shadow-lg transition cursor-pointer"
@@ -3530,6 +3568,18 @@ function ClientesPage({ token, clients, clientSearch, handleClientSearch, handle
           </div>
         )}
       </div>
+      
+      {/* Botão Carregar Mais */}
+      {clients.length > visibleCount && (
+        <div className="mt-6 text-center">
+          <button
+            onClick={() => setVisibleCount(prev => prev + 10)}
+            className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition font-semibold"
+          >
+            ➕ Carregar mais 10 clientes ({clients.length - visibleCount} restantes)
+          </button>
+        </div>
+      )}
     </div>
   );
 }
