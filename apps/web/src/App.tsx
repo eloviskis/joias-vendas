@@ -149,7 +149,10 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
     rg: client.rg || '',
     city: client.city || '',
     address: client.address || '',
-    billingAddress: client.billingAddress || ''
+    billingAddress: client.billingAddress || '',
+    profession: client.profession || '',
+    workPhone: client.workPhone || '',
+    workAddress: client.workAddress || ''
   });
 
   const handleSaveEdit = async () => {
@@ -252,6 +255,26 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
                     onChange={e => setEditForm({...editForm, billingAddress: e.target.value})}
                     className="w-full p-2 rounded text-gray-800 text-sm h-16"
                   />
+                  <input 
+                    type="text" 
+                    placeholder="Profissão" 
+                    value={editForm.profession}
+                    onChange={e => setEditForm({...editForm, profession: e.target.value})}
+                    className="w-full p-2 rounded text-gray-800 text-sm"
+                  />
+                  <input 
+                    type="tel" 
+                    placeholder="Telefone do Local de Trabalho" 
+                    value={editForm.workPhone}
+                    onChange={e => setEditForm({...editForm, workPhone: e.target.value})}
+                    className="w-full p-2 rounded text-gray-800 text-sm"
+                  />
+                  <textarea 
+                    placeholder="Endereço do Local de Trabalho" 
+                    value={editForm.workAddress}
+                    onChange={e => setEditForm({...editForm, workAddress: e.target.value})}
+                    className="w-full p-2 rounded text-gray-800 text-sm h-16"
+                  />
                   <div className="flex gap-2 mt-2">
                     <button 
                       onClick={handleSaveEdit}
@@ -276,6 +299,9 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
                   {client.city && <p className="text-sm opacity-80">🏙️ {client.city}</p>}
                   {client.address && <p className="text-sm opacity-80">📍 {client.address}</p>}
                   {client.billingAddress && <p className="text-sm opacity-80">💳 Cobrança: {client.billingAddress}</p>}
+                  {client.profession && <p className="text-sm opacity-80">💼 Profissão: {client.profession}</p>}
+                  {client.workPhone && <p className="text-sm opacity-80">☎️ Tel. Trabalho: {client.workPhone}</p>}
+                  {client.workAddress && <p className="text-sm opacity-80">🏢 End. Trabalho: {client.workAddress}</p>}
                   {onUpdateClient && (
                     <button 
                       onClick={() => setIsEditing(true)}
@@ -459,6 +485,9 @@ export default function App() {
   const [newClientCity, setNewClientCity] = useState('');
   const [newClientAddress, setNewClientAddress] = useState('');
   const [newClientBillingAddress, setNewClientBillingAddress] = useState('');
+  const [newClientProfession, setNewClientProfession] = useState('');
+  const [newClientWorkPhone, setNewClientWorkPhone] = useState('');
+  const [newClientWorkAddress, setNewClientWorkAddress] = useState('');
 
   useEffect(() => {
     if (token && page === 'dashboard') {
@@ -827,7 +856,10 @@ export default function App() {
           rg: newClientRg || null,
           city: newClientCity || null,
           address: newClientAddress || null,
-          billingAddress: newClientBillingAddress || null
+          billingAddress: newClientBillingAddress || null,
+          profession: newClientProfession || null,
+          workPhone: newClientWorkPhone || null,
+          workAddress: newClientWorkAddress || null
         })
       });
 
@@ -841,6 +873,9 @@ export default function App() {
         setNewClientCity('');
         setNewClientAddress('');
         setNewClientBillingAddress('');
+        setNewClientProfession('');
+        setNewClientWorkPhone('');
+        setNewClientWorkAddress('');
         loadClients();
       } else {
         alert('Erro ao criar cliente');
@@ -1709,6 +1744,39 @@ export default function App() {
                   onChange={(e) => setNewClientBillingAddress(e.target.value)}
                 />
               </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Profissão</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Vendedor(a), Empresário(a)..."
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                  value={newClientProfession}
+                  onChange={(e) => setNewClientProfession(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Telefone do Local de Trabalho</label>
+                <input
+                  type="tel"
+                  placeholder="(11) 3333-3333"
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                  value={newClientWorkPhone}
+                  onChange={(e) => setNewClientWorkPhone(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Endereço do Local de Trabalho</label>
+                <textarea
+                  placeholder="Rua, número, bairro, cidade..."
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none resize-none"
+                  rows={2}
+                  value={newClientWorkAddress}
+                  onChange={(e) => setNewClientWorkAddress(e.target.value)}
+                />
+              </div>
             </div>
             
             <div className="flex gap-3 mt-6">
@@ -1722,6 +1790,9 @@ export default function App() {
                   setNewClientCity('');
                   setNewClientAddress('');
                   setNewClientBillingAddress('');
+                  setNewClientProfession('');
+                  setNewClientWorkPhone('');
+                  setNewClientWorkAddress('');
                 }}
                 className="flex-1 bg-gray-300 text-gray-700 px-4 py-3 rounded-lg font-semibold hover:bg-gray-400 transition"
               >

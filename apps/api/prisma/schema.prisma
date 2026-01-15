@@ -23,6 +23,9 @@ model Client {
   city    String?
   address String?
   billingAddress String? @map("billingaddress")
+  profession String?
+  workPhone String? @map("workphone")
+  workAddress String? @map("workaddress")
   sales   Sale[]
 }
 
