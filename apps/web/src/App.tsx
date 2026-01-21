@@ -4105,6 +4105,7 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
   const [clientSearch, setClientSearch] = useState('');
   const [editingPaymentDate, setEditingPaymentDate] = useState<any>(null);
   const [newPaymentDate, setNewPaymentDate] = useState('');
+  const [sortOrder, setSortOrder] = useState<'recent' | 'oldest'>('recent');
 
   const filteredClients = useMemo(() => {
     if (!clientSearch.trim()) return clients;
@@ -4114,6 +4115,16 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
       c.phone?.toLowerCase().includes(term)
     );
   }, [clients, clientSearch]);
+
+  const sortedSales = useMemo(() => {
+    const sorted = [...sales];
+    sorted.sort((a, b) => {
+      const dateA = new Date(a.saleDate).getTime();
+      const dateB = new Date(b.saleDate).getTime();
+      return sortOrder === 'recent' ? dateB - dateA : dateA - dateB;
+    });
+    return sorted;
+  }, [sales, sortOrder]);
 
   useEffect(() => {
     loadClients();
@@ -4308,14 +4319,42 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
         {selectedClient ? (
           <>
             <div className="mb-6">
-              <h2 className="text-2xl font-bold text-gray-800">
-                📜 Histórico de {selectedClient.name}
-              </h2>
-              <p className="text-gray-600">{selectedClient.phone}</p>
+              <div className="flex justify-between items-start flex-wrap gap-4 mb-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-800">
+                    📜 Histórico de {selectedClient.name}
+                  </h2>
+                  <p className="text-gray-600">{selectedClient.phone}</p>
+                </div>
+                
+                {/* Botões de Ordenação */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSortOrder('recent')}
+                    className={`px-4 py-2 rounded-lg font-semibold transition ${
+                      sortOrder === 'recent'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    🔽 Mais Recentes
+                  </button>
+                  <button
+                    onClick={() => setSortOrder('oldest')}
+                    className={`px-4 py-2 rounded-lg font-semibold transition ${
+                      sortOrder === 'oldest'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    🔼 Mais Antigas
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-4 max-h-[600px] overflow-y-auto">
-              {sales.map((sale: any) => {
+              {sortedSales.map((sale: any) => {
                 const totalPago = getTotalPaid(sale.installmentsR || []);
                 const totalPendente = getTotalPending(sale.installmentsR || []);
                 const progresso = (totalPago / sale.totalValue) * 100;
