@@ -959,7 +959,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       <ScrollToTop />
-      <nav className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 shadow-lg">
+      <nav className="bg-purple-600 text-white p-4 shadow-lg">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">💎 Joias Vendas</h1>
           <div className="flex items-center gap-3">
@@ -1847,7 +1847,7 @@ export default function App() {
       )}
 
       {/* Rodapé com Versão */}
-      <footer className="bg-gradient-to-r from-purple-900 to-blue-900 text-white text-center py-4 mt-8 border-t-2 border-purple-500">
+      <footer className="bg-purple-800 text-white text-center py-4 mt-8 border-t-2 border-purple-500">
         <p className="text-sm font-semibold">
           💎 Joias Vendas
         </p>
