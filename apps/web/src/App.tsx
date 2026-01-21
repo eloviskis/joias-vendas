@@ -1893,6 +1893,26 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
   const [sellerName, setSellerName] = useState('');
   const [sellers, setSellers] = useState<string[]>([]);
   const [showSellerSuggestions, setShowSellerSuggestions] = useState(false);
+  
+  // Estados para múltiplos itens
+  const [useMultipleItems, setUseMultipleItems] = useState(false);
+  const [saleItems, setSaleItems] = useState<Array<{
+    itemName: string;
+    itemCode?: string;
+    factor?: number;
+    baseValue?: number;
+    quantity: number;
+    unitPrice: number;
+    totalValue: number;
+  }>>([]);
+  const [currentItem, setCurrentItem] = useState({
+    itemName: '',
+    itemCode: '',
+    factor: '',
+    baseValue: '',
+    quantity: '1',
+    unitPrice: ''
+  });
 
   // Carregar vendedoras já usadas
   useEffect(() => {
@@ -1957,6 +1977,65 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
       setTotalValue(finalValue.toFixed(2));
     }
   }, [factor, baseValue, roundUpTotal]);
+
+  // Atualizar total quando múltiplos itens mudarem
+  useEffect(() => {
+    if (useMultipleItems && saleItems.length > 0) {
+      const subtotal = saleItems.reduce((sum, item) => sum + item.totalValue, 0);
+      const discount = parseFloat(discountValue) || 0;
+      setTotalValue((subtotal - discount).toFixed(2));
+    }
+  }, [saleItems, discountValue, useMultipleItems]);
+
+  // Atualizar valor do item atual quando factor ou baseValue mudar
+  useEffect(() => {
+    const factorNum = parseFloat(currentItem.factor);
+    const baseNum = parseFloat(currentItem.baseValue);
+    const quantity = parseInt(currentItem.quantity) || 1;
+    
+    if (!isNaN(factorNum) && !isNaN(baseNum) && factorNum > 0 && baseNum > 0) {
+      const unitPrice = factorNum * baseNum;
+      setCurrentItem(prev => ({ ...prev, unitPrice: unitPrice.toFixed(2) }));
+    }
+  }, [currentItem.factor, currentItem.baseValue, currentItem.quantity]);
+
+  const addItemToSale = () => {
+    if (!currentItem.itemName || !currentItem.unitPrice || parseFloat(currentItem.unitPrice) <= 0) {
+      alert('Preencha o nome e valor do item');
+      return;
+    }
+
+    const quantity = parseInt(currentItem.quantity) || 1;
+    const unitPrice = parseFloat(currentItem.unitPrice);
+    const totalValue = unitPrice * quantity;
+
+    const newItem = {
+      itemName: currentItem.itemName,
+      itemCode: currentItem.itemCode || undefined,
+      factor: currentItem.factor ? parseFloat(currentItem.factor) : undefined,
+      baseValue: currentItem.baseValue ? parseFloat(currentItem.baseValue) : undefined,
+      quantity,
+      unitPrice,
+      totalValue
+    };
+
+    setSaleItems([...saleItems, newItem]);
+    
+    // Limpar formulário do item
+    setCurrentItem({
+      itemName: '',
+      itemCode: '',
+      factor: '',
+      baseValue: '',
+      quantity: '1',
+      unitPrice: ''
+    });
+    setItemSearch('');
+  };
+
+  const removeItemFromSale = (index: number) => {
+    setSaleItems(saleItems.filter((_, i) => i !== index));
+  };
 
   const normalizedFilter = clientFilter.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
   const phoneFilter = clientFilter.replace(/\D/g, '');
@@ -2036,7 +2115,7 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           clientId,
-          itemName,
+          itemName: useMultipleItems && saleItems.length > 0 ? saleItems.map(i => i.itemName).join(', ') : itemName,
           itemCode: itemCode || null,
           factor: factor ? parseFloat(factor) : null,
           itemType: itemType || null,
@@ -2049,7 +2128,9 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
           saleDate: new Date(),
           imageBase64: photo,
           sendCard: sendCard && installments > 1,
-          sellerName: sellerName || null
+          sellerName: sellerName || null,
+          items: useMultipleItems ? saleItems : null,
+          discount: useMultipleItems && discountValue ? parseFloat(discountValue) : 0
         })
       });
       
@@ -2102,6 +2183,17 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
         setClientAddress('');
         setClientBillingAddress('');
         setSellerName('');
+        setSaleItems([]);
+        setUseMultipleItems(false);
+        setDiscountValue('');
+        setCurrentItem({
+          itemName: '',
+          itemCode: '',
+          factor: '',
+          baseValue: '',
+          quantity: '1',
+          unitPrice: ''
+        });
       } else {
         const error = await res.json();
         alert('Erro ao registrar venda: ' + (error.message || 'Erro desconhecido'));
@@ -2309,6 +2401,195 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
         </div>
         <p className="text-xs text-pink-600 mt-1">Este nome aparecerá em todos os relatórios e na relação de cobrança</p>
       </div>
+
+      {/* Toggle para múltiplos itens */}
+      <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-300 rounded-xl">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={useMultipleItems}
+            onChange={(e) => {
+              setUseMultipleItems(e.target.checked);
+              if (!e.target.checked) {
+                setSaleItems([]);
+                setDiscountValue('');
+              }
+            }}
+            className="w-6 h-6 accent-purple-600"
+          />
+          <span className="text-lg font-bold text-purple-800">📋 Adicionar Múltiplos Produtos na Venda</span>
+        </label>
+        <p className="text-xs text-purple-600 mt-2 ml-9">Ative para adicionar vários produtos em uma única compra</p>
+      </div>
+
+      {useMultipleItems ? (
+        /* Seção de Múltiplos Itens */
+        <div className="mb-6">
+          {/* Formulário para adicionar item */}
+          <div className="p-4 bg-white border-2 border-purple-300 rounded-xl mb-4">
+            <h3 className="font-bold text-purple-800 mb-4">➕ Adicionar Produto</h3>
+            
+            <div className="mb-3">
+              <label className="block text-sm font-semibold mb-1">Nome do Produto</label>
+              <input 
+                type="text" 
+                className="w-full p-2 border rounded-lg" 
+                placeholder="Ex: Anel de formatura, Brinco..." 
+                value={currentItem.itemName} 
+                onChange={(e) => setCurrentItem({...currentItem, itemName: e.target.value})} 
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="block text-sm font-semibold mb-1">Código</label>
+                <input 
+                  type="text" 
+                  className="w-full p-2 border rounded-lg" 
+                  placeholder="Opcional" 
+                  value={currentItem.itemCode} 
+                  onChange={(e) => setCurrentItem({...currentItem, itemCode: e.target.value})} 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1">Fator</label>
+                <input 
+                  type="number" 
+                  step="0.1"
+                  className="w-full p-2 border rounded-lg" 
+                  placeholder="Ex: 3.5" 
+                  value={currentItem.factor} 
+                  onChange={(e) => setCurrentItem({...currentItem, factor: e.target.value})} 
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="block text-sm font-semibold mb-1">Valor Base (R$)</label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  className="w-full p-2 border rounded-lg" 
+                  placeholder="0.00" 
+                  value={currentItem.baseValue} 
+                  onChange={(e) => setCurrentItem({...currentItem, baseValue: e.target.value})} 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1">Parcelas (X)</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  className="w-full p-2 border rounded-lg" 
+                  placeholder="1" 
+                  value={currentItem.quantity} 
+                  onChange={(e) => setCurrentItem({...currentItem, quantity: e.target.value})} 
+                />
+              </div>
+            </div>
+
+            <div className="mb-3">
+              <label className="block text-sm font-semibold mb-1">Valor Unitário (R$)</label>
+              <input 
+                type="number" 
+                step="0.01"
+                className="w-full p-2 border rounded-lg font-bold text-green-600" 
+                placeholder="0.00" 
+                value={currentItem.unitPrice} 
+                onChange={(e) => setCurrentItem({...currentItem, unitPrice: e.target.value})} 
+              />
+              <p className="text-xs text-gray-500 mt-1">Calculado automaticamente ou digite manualmente</p>
+            </div>
+
+            {currentItem.unitPrice && parseFloat(currentItem.unitPrice) > 0 && (
+              <div className="bg-green-50 p-3 rounded-lg border border-green-300 mb-3">
+                <p className="text-sm text-gray-700">
+                  <strong>Total deste item:</strong> {currentItem.quantity || 1} × R$ {parseFloat(currentItem.unitPrice).toFixed(2)} = 
+                  <span className="text-xl font-bold text-green-600 ml-2">
+                    R$ {((parseInt(currentItem.quantity) || 1) * parseFloat(currentItem.unitPrice)).toFixed(2)}
+                  </span>
+                </p>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={addItemToSale}
+              className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 font-bold"
+            >
+              ➕ Adicionar à Lista
+            </button>
+          </div>
+
+          {/* Lista de itens adicionados */}
+          {saleItems.length > 0 && (
+            <div className="p-4 bg-gradient-to-br from-green-50 to-blue-50 border-2 border-green-300 rounded-xl">
+              <h3 className="font-bold text-green-800 mb-3">📦 Produtos Adicionados ({saleItems.length})</h3>
+              <div className="space-y-2 mb-4">
+                {saleItems.map((item, index) => (
+                  <div key={index} className="bg-white p-3 rounded-lg border border-gray-200 flex justify-between items-start">
+                    <div className="flex-1">
+                      <p className="font-bold text-gray-800">{item.itemName}</p>
+                      {item.itemCode && <p className="text-xs text-gray-600">Código: {item.itemCode}</p>}
+                      <p className="text-sm text-gray-700 mt-1">
+                        {item.quantity}× R$ {item.unitPrice.toFixed(2)} = 
+                        <span className="font-bold text-green-600 ml-1">R$ {item.totalValue.toFixed(2)}</span>
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => removeItemFromSale(index)}
+                      className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 ml-2"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-t-2 border-green-400 pt-3">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-bold text-gray-700">Subtotal:</span>
+                  <span className="text-xl font-bold text-green-600">
+                    R$ {saleItems.reduce((sum, item) => sum + item.totalValue, 0).toFixed(2)}
+                  </span>
+                </div>
+
+                {/* Campo de desconto */}
+                <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-300 mb-2">
+                  <label className="block text-sm font-semibold mb-1 text-yellow-800">Desconto (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={discountValue}
+                    onChange={(e) => setDiscountValue(e.target.value)}
+                    className="w-full p-2 border-2 border-yellow-400 rounded-lg text-lg font-bold text-red-600"
+                  />
+                </div>
+
+                {discountValue && parseFloat(discountValue) > 0 && (
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-semibold text-red-600">Desconto:</span>
+                    <span className="text-lg font-bold text-red-600">
+                      - R$ {parseFloat(discountValue).toFixed(2)}
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center p-3 bg-green-600 text-white rounded-lg">
+                  <span className="text-lg font-bold">TOTAL DA COMPRA:</span>
+                  <span className="text-2xl font-bold">
+                    R$ {(saleItems.reduce((sum, item) => sum + item.totalValue, 0) - (parseFloat(discountValue) || 0)).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Formulário de Item Único (modo antigo) */
+        <>
 
       <div className="mb-4">
         <label className="block font-semibold mb-2">💎 Joia</label>
@@ -2679,6 +2960,10 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
           </div>
         );
       })()}
+      </>
+      )}
+
+      {/* Fim do toggle de múltiplos itens / item único */}
 
       {installments > 1 && (
         <div className="mb-4">

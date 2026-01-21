@@ -260,7 +260,7 @@ app.get('/clients/:id/sales', async (req: any) => {
 
 app.get('/sales', async () => {
   return prisma.sale.findMany({
-    include: { client: true, installmentsR: true },
+    include: { client: true, installmentsR: true, items: true },
     orderBy: { saleDate: 'desc' }
   });
 });
@@ -320,10 +320,52 @@ app.delete('/sales/:id', async (req: any, reply) => {
 });
 
 app.post('/sales', async (req: any) => {
-  const { clientId, itemName, itemCode, factor, itemType, baseValue, totalValue, paymentMethod, installments, roundUpInstallments, customInstallmentValues, saleDate, observations, sellerName, commission, imageBase64, sendCard } = req.body;
+  const { clientId, itemName, itemCode, factor, itemType, baseValue, totalValue, paymentMethod, installments, roundUpInstallments, customInstallmentValues, saleDate, observations, sellerName, commission, imageBase64, sendCard, items, discount } = req.body;
+  
+  // Calcular total se houver itens
+  let calculatedTotal = totalValue;
+  if (items && items.length > 0) {
+    calculatedTotal = items.reduce((sum: number, item: any) => sum + item.totalValue, 0);
+    if (discount) {
+      calculatedTotal -= discount;
+    }
+  }
+  
   const sale = await prisma.sale.create({
-    data: { clientId, itemName, itemCode, factor, itemType, baseValue, totalValue, paymentMethod, installments, saleDate, observations, sellerName, commission }
+    data: { 
+      clientId, 
+      itemName, 
+      itemCode, 
+      factor, 
+      itemType, 
+      baseValue, 
+      totalValue: calculatedTotal, 
+      paymentMethod, 
+      installments, 
+      saleDate, 
+      observations, 
+      sellerName, 
+      commission,
+      discount: discount || 0
+    }
   });
+  
+  // Criar itens da venda se fornecidos
+  if (items && items.length > 0) {
+    await prisma.saleItem.createMany({
+      data: items.map((item: any) => ({
+        saleId: sale.id,
+        itemName: item.itemName,
+        itemCode: item.itemCode || null,
+        factor: item.factor || null,
+        baseValue: item.baseValue || null,
+        quantity: item.quantity || 1,
+        unitPrice: item.unitPrice,
+        totalValue: item.totalValue
+      }))
+    });
+  }
+  
   // save image if provided
   let photoUrl: string | null = null;
   if (imageBase64) {
@@ -352,9 +394,9 @@ app.post('/sales', async (req: any) => {
     }
   } else if (roundUpInstallments && installments > 1) {
     // Arredondar parcelas para cima, última parcela menor
-    const parcelaArredondada = Math.ceil(totalValue / installments);
+    const parcelaArredondada = Math.ceil(calculatedTotal / installments);
     const somaArredondada = parcelaArredondada * (installments - 1);
-    const ultimaParcela = totalValue - somaArredondada;
+    const ultimaParcela = calculatedTotal - somaArredondada;
     
     for (let i = 0; i < installments; i++) {
       const due = new Date(saleDate || new Date());
@@ -364,7 +406,7 @@ app.post('/sales', async (req: any) => {
     }
   } else {
     // Parcelas iguais (comportamento padrão)
-    const per = installments && installments > 1 ? totalValue / installments : totalValue;
+    const per = installments && installments > 1 ? calculatedTotal / installments : calculatedTotal;
     for (let i = 0; i < installments; i++) {
       const due = new Date(saleDate || new Date());
       due.setMonth(due.getMonth() + i);
@@ -387,7 +429,7 @@ app.post('/sales', async (req: any) => {
         const cardData: CardData = {
           clientName: client.name,
           itemName,
-          totalValue,
+          totalValue: calculatedTotal,
           saleDate: new Date(saleDate),
           installments: createdInstallments.map(i => ({
             sequence: i.sequence,

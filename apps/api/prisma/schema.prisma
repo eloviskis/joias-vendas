@@ -46,7 +46,23 @@ model Sale {
   sellerName    String?
   commission    Float?
   photoUrl      String?
+  discount      Float?       @default(0)
+  items         SaleItem[]
   installmentsR Installment[]
+}
+
+model SaleItem {
+  id          Int      @id @default(autoincrement())
+  saleId      Int
+  sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  itemName    String
+  itemCode    String?
+  factor      Float?
+  baseValue   Float?
+  quantity    Int      @default(1)
+  unitPrice   Float
+  totalValue  Float
+  createdAt   DateTime @default(now())
 }
 
 model Installment {
