@@ -4242,14 +4242,6 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
       alert('Erro ao atualizar data de pagamento');
     }
   };
-        const error = await res.json();
-        alert(`Erro ao excluir venda: ${error.error || 'Erro desconhecido'}`);
-      }
-    } catch (error) {
-      console.error('Erro ao excluir venda:', error);
-      alert('Erro ao excluir venda');
-    }
-  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
