@@ -1913,6 +1913,11 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
     quantity: '1',
     unitPrice: ''
   });
+  const [firstPaymentDate, setFirstPaymentDate] = useState(() => {
+    const today = new Date();
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    return nextMonth.toISOString().split('T')[0].substring(0, 7); // YYYY-MM
+  });
 
   // Carregar vendedoras já usadas
   useEffect(() => {
@@ -2130,7 +2135,8 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
           sendCard: sendCard && installments > 1,
           sellerName: sellerName || null,
           items: useMultipleItems ? saleItems : null,
-          discount: useMultipleItems && discountValue ? parseFloat(discountValue) : 0
+          discount: useMultipleItems && discountValue ? parseFloat(discountValue) : 0,
+          firstPaymentDate: installments > 1 ? firstPaymentDate : null
         })
       });
       
@@ -2194,6 +2200,10 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
           quantity: '1',
           unitPrice: ''
         });
+        // Resetar data do primeiro pagamento para próximo mês
+        const nextMonth = new Date();
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        setFirstPaymentDate(nextMonth.toISOString().split('T')[0].substring(0, 7));
       } else {
         const error = await res.json();
         alert('Erro ao registrar venda: ' + (error.message || 'Erro desconhecido'));
@@ -2747,6 +2757,23 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
         <input type="number" className="w-full p-3 border rounded-lg" min="1" value={installments} onChange={(e) => { setInstallments(parseInt(e.target.value)); if (parseInt(e.target.value) > 1) setDiscountValue(''); }} title="Número de parcelas" placeholder="Número de parcelas" />
       </div>
 
+      {/* Campo de Data do Primeiro Pagamento */}
+      {installments > 1 && (
+        <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl">
+          <label className="block font-bold text-blue-800 mb-2">📅 Mês do Primeiro Pagamento</label>
+          <input 
+            type="month" 
+            className="w-full p-3 border-2 border-blue-400 rounded-lg text-lg font-semibold focus:border-blue-600 focus:outline-none" 
+            value={firstPaymentDate} 
+            onChange={(e) => setFirstPaymentDate(e.target.value)}
+            min={new Date().toISOString().split('T')[0].substring(0, 7)}
+          />
+          <p className="text-sm text-blue-700 mt-2">
+            ✨ Benefício: Cliente pode começar a pagar em {new Date(firstPaymentDate + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+          </p>
+        </div>
+      )}
+
       {/* Campo de Desconto à Vista */}
       {installments === 1 && totalValue && parseFloat(totalValue) > 0 && (
         <div className="mb-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl">
@@ -2788,9 +2815,11 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
         
         // Gerar lista de parcelas para preview
         const parcelasPreview = [];
-        const hoje = new Date();
+        const [year, month] = firstPaymentDate.split('-').map(Number);
+        const baseDate = new Date(year, month - 1, 1); // Mês no JS é 0-indexed
+        
         for (let i = 0; i < installments; i++) {
-          const vencimento = new Date(hoje);
+          const vencimento = new Date(baseDate);
           vencimento.setMonth(vencimento.getMonth() + i);
           
           let valor;

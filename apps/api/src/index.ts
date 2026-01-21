@@ -320,7 +320,7 @@ app.delete('/sales/:id', async (req: any, reply) => {
 });
 
 app.post('/sales', async (req: any) => {
-  const { clientId, itemName, itemCode, factor, itemType, baseValue, totalValue, paymentMethod, installments, roundUpInstallments, customInstallmentValues, saleDate, observations, sellerName, commission, imageBase64, sendCard, items, discount } = req.body;
+  const { clientId, itemName, itemCode, factor, itemType, baseValue, totalValue, paymentMethod, installments, roundUpInstallments, customInstallmentValues, saleDate, observations, sellerName, commission, imageBase64, sendCard, items, discount, firstPaymentDate } = req.body;
   
   // Calcular total se houver itens
   let calculatedTotal = totalValue;
@@ -385,10 +385,20 @@ app.post('/sales', async (req: any) => {
   // create installments
   const inst = [] as any[];
   
+  // Determinar data base para as parcelas
+  let baseDate: Date;
+  if (firstPaymentDate) {
+    // Usar a data escolhida pelo usuário (YYYY-MM)
+    const [year, month] = firstPaymentDate.split('-').map(Number);
+    baseDate = new Date(year, month - 1, 1); // Mês no JS é 0-indexed
+  } else {
+    baseDate = new Date(saleDate || new Date());
+  }
+  
   if (customInstallmentValues && Array.isArray(customInstallmentValues) && customInstallmentValues.length === installments) {
     // Usar valores personalizados das parcelas
     for (let i = 0; i < installments; i++) {
-      const due = new Date(saleDate || new Date());
+      const due = new Date(baseDate);
       due.setMonth(due.getMonth() + i);
       inst.push({ saleId: sale.id, sequence: i + 1, amount: customInstallmentValues[i], dueDate: due });
     }
@@ -399,7 +409,7 @@ app.post('/sales', async (req: any) => {
     const ultimaParcela = calculatedTotal - somaArredondada;
     
     for (let i = 0; i < installments; i++) {
-      const due = new Date(saleDate || new Date());
+      const due = new Date(baseDate);
       due.setMonth(due.getMonth() + i);
       const amount = i === installments - 1 ? ultimaParcela : parcelaArredondada;
       inst.push({ saleId: sale.id, sequence: i + 1, amount, dueDate: due });
@@ -408,7 +418,7 @@ app.post('/sales', async (req: any) => {
     // Parcelas iguais (comportamento padrão)
     const per = installments && installments > 1 ? calculatedTotal / installments : calculatedTotal;
     for (let i = 0; i < installments; i++) {
-      const due = new Date(saleDate || new Date());
+      const due = new Date(baseDate);
       due.setMonth(due.getMonth() + i);
       inst.push({ saleId: sale.id, sequence: i + 1, amount: per, dueDate: due });
     }
