@@ -154,11 +154,44 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
     workPhone: client.workPhone || '',
     workAddress: client.workAddress || ''
   });
+  const [editingPaymentDate, setEditingPaymentDate] = useState<any>(null);
+  const [newPaymentDate, setNewPaymentDate] = useState('');
 
   const handleSaveEdit = async () => {
     if (onUpdateClient) {
       await onUpdateClient(client.id, editForm);
       setIsEditing(false);
+    }
+  };
+
+  const handleUpdatePaymentDate = async () => {
+    if (!newPaymentDate || !token) {
+      alert('Selecione uma data válida!');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/sales/${editingPaymentDate.id}/update-payment-date`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          firstPaymentDate: newPaymentDate
+        })
+      });
+
+      if (res.ok) {
+        // Recarregar a página ou atualizar os dados
+        window.location.reload();
+      } else {
+        const error = await res.json();
+        alert(`Erro ao atualizar: ${error.error || 'Erro desconhecido'}`);
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar data:', error);
+      alert('Erro ao atualizar data de pagamento');
     }
   };
 
@@ -354,14 +387,34 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
                 {/* Cabeçalho da Venda */}
                 <div className="bg-purple-100 p-4 border-b">
                   <div className="flex justify-between items-start flex-wrap gap-2">
-                    <div>
+                    <div className="flex-1">
                       <h3 className="font-bold text-lg text-gray-800">💎 {sale.itemName}</h3>
                       {sale.itemCode && <p className="text-sm text-gray-600">Código: {sale.itemCode}</p>}
+                      {sale.installmentsR && sale.installmentsR.length > 0 && (
+                        <p className="text-xs text-blue-600 mt-1">
+                          📅 Primeiro pagamento: {new Date(sale.installmentsR[0].dueDate).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                        </p>
+                      )}
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm text-gray-600">Data: {new Date(sale.saleDate).toLocaleDateString('pt-BR')}</p>
-                      <p className="font-bold text-green-600">{formatCurrency(sale.totalValue)}</p>
-                      {sale.factor && <p className="text-xs text-gray-500">Fator: {sale.factor} | Base: {formatCurrency(sale.baseValue)}</p>}
+                    <div className="text-right flex items-start gap-2">
+                      <div>
+                        <p className="text-sm text-gray-600">Data: {new Date(sale.saleDate).toLocaleDateString('pt-BR')}</p>
+                        <p className="font-bold text-green-600">{formatCurrency(sale.totalValue)}</p>
+                        {sale.factor && <p className="text-xs text-gray-500">Fator: {sale.factor} | Base: {formatCurrency(sale.baseValue)}</p>}
+                      </div>
+                      {sale.installmentsR && sale.installmentsR.length > 1 && token && (
+                        <button
+                          onClick={() => {
+                            setEditingPaymentDate(sale);
+                            const firstDue = new Date(sale.installmentsR[0].dueDate);
+                            setNewPaymentDate(`${firstDue.getFullYear()}-${String(firstDue.getMonth() + 1).padStart(2, '0')}`);
+                          }}
+                          className="p-2 text-blue-600 hover:bg-blue-200 rounded transition"
+                          title="Editar data do primeiro pagamento"
+                        >
+                          📅
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -438,6 +491,46 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
             <p className="text-center text-gray-500 py-8">Nenhuma venda registrada para este cliente</p>
           )}
         </div>
+
+        {/* Modal de Edição de Data de Pagamento */}
+        {editingPaymentDate && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+              <h3 className="text-xl font-bold text-gray-800 mb-4">📅 Editar Data de Pagamento</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Venda: <span className="font-semibold">{editingPaymentDate.itemName}</span>
+              </p>
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Primeiro mês de pagamento
+                </label>
+                <input
+                  type="month"
+                  value={newPaymentDate}
+                  onChange={(e) => setNewPaymentDate(e.target.value)}
+                  className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-600 focus:outline-none"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setEditingPaymentDate(null);
+                    setNewPaymentDate('');
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleUpdatePaymentDate}
+                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold"
+                >
+                  Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
