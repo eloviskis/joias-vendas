@@ -4106,15 +4106,31 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
   const [editingPaymentDate, setEditingPaymentDate] = useState<any>(null);
   const [newPaymentDate, setNewPaymentDate] = useState('');
   const [sortOrder, setSortOrder] = useState<'recent' | 'oldest'>('recent');
+  const [clientSortOrder, setClientSortOrder] = useState<'recent' | 'oldest'>('recent');
 
   const filteredClients = useMemo(() => {
-    if (!clientSearch.trim()) return clients;
-    const term = clientSearch.toLowerCase();
-    return clients.filter(c =>
-      c.name?.toLowerCase().includes(term) ||
-      c.phone?.toLowerCase().includes(term)
-    );
-  }, [clients, clientSearch]);
+    let filtered = clientSearch.trim() ? clients.filter(c => {
+      const term = clientSearch.toLowerCase();
+      return c.name?.toLowerCase().includes(term) || c.phone?.toLowerCase().includes(term);
+    }) : clients;
+
+    // Ordenar clientes por data da venda mais recente
+    const sorted = [...filtered].sort((a, b) => {
+      const salesA = allSales.filter(s => s.clientId === a.id);
+      const salesB = allSales.filter(s => s.clientId === b.id);
+      
+      if (salesA.length === 0 && salesB.length === 0) return 0;
+      if (salesA.length === 0) return 1;
+      if (salesB.length === 0) return -1;
+      
+      const latestA = Math.max(...salesA.map(s => new Date(s.saleDate).getTime()));
+      const latestB = Math.max(...salesB.map(s => new Date(s.saleDate).getTime()));
+      
+      return clientSortOrder === 'recent' ? latestB - latestA : latestA - latestB;
+    });
+
+    return sorted;
+  }, [clients, clientSearch, allSales, clientSortOrder]);
 
   const sortedSales = useMemo(() => {
     const sorted = [...sales];
@@ -4282,6 +4298,31 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
             ))}
           </datalist>
         </div>
+        
+        {/* Botões de Ordenação de Clientes */}
+        <div className="mb-4 flex gap-2">
+          <button
+            onClick={() => setClientSortOrder('recent')}
+            className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition ${
+              clientSortOrder === 'recent'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            🔽 Mais Recentes
+          </button>
+          <button
+            onClick={() => setClientSortOrder('oldest')}
+            className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition ${
+              clientSortOrder === 'oldest'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            🔼 Mais Antigas
+          </button>
+        </div>
+        
         <div className="space-y-2 max-h-96 overflow-y-auto">
           {filteredClients.map((client: any) => {
             const clientSales = allSales.filter(s => s.clientId === client.id);
