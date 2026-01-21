@@ -1911,6 +1911,7 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
     factor: '',
     baseValue: '',
     quantity: '1',
+    installmentsPerItem: '1',
     unitPrice: ''
   });
   const [firstPaymentDate, setFirstPaymentDate] = useState(() => {
@@ -2012,6 +2013,7 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
 
     const quantity = parseInt(currentItem.quantity) || 1;
     const unitPrice = parseFloat(currentItem.unitPrice);
+    const installmentsPerItem = parseInt(currentItem.installmentsPerItem) || 1;
     const totalValue = unitPrice * quantity;
 
     const newItem = {
@@ -2021,7 +2023,8 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
       baseValue: currentItem.baseValue ? parseFloat(currentItem.baseValue) : undefined,
       quantity,
       unitPrice,
-      totalValue
+      totalValue,
+      installmentsPerItem
     };
 
     setSaleItems([...saleItems, newItem]);
@@ -2033,6 +2036,7 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
       factor: '',
       baseValue: '',
       quantity: '1',
+      installmentsPerItem: '1',
       unitPrice: ''
     });
     setItemSearch('');
@@ -2433,166 +2437,358 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
       </div>
 
       {useMultipleItems ? (
-        /* Seção de Múltiplos Itens */
-        <div className="mb-6">
+        /* Seção de Carrinho de Compras - Estilo Mercado Livre */
+        <div className="mb-6 space-y-6">
           {/* Formulário para adicionar item */}
-          <div className="p-4 bg-white border-2 border-purple-300 rounded-xl mb-4">
-            <h3 className="font-bold text-purple-800 mb-4">➕ Adicionar Produto</h3>
+          <div className="p-6 bg-gradient-to-br from-white to-purple-50 border-2 border-purple-300 rounded-xl shadow-md">
+            <h3 className="font-bold text-purple-800 mb-4 text-lg flex items-center gap-2">
+              <span className="text-2xl">🛒</span> Adicionar Produto ao Carrinho
+            </h3>
             
-            <div className="mb-3">
-              <label className="block text-sm font-semibold mb-1">Nome do Produto</label>
-              <input 
-                type="text" 
-                className="w-full p-2 border rounded-lg" 
-                placeholder="Ex: Anel de formatura, Brinco..." 
-                value={currentItem.itemName} 
-                onChange={(e) => setCurrentItem({...currentItem, itemName: e.target.value})} 
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div>
-                <label className="block text-sm font-semibold mb-1">Código</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold mb-1 text-gray-700">Nome do Produto *</label>
                 <input 
                   type="text" 
-                  className="w-full p-2 border rounded-lg" 
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none" 
+                  placeholder="Ex: Anel de formatura, Brinco de pérola..." 
+                  value={currentItem.itemName} 
+                  onChange={(e) => setCurrentItem({...currentItem, itemName: e.target.value})} 
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-1 text-gray-700">Código</label>
+                <input 
+                  type="text" 
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none" 
                   placeholder="Opcional" 
                   value={currentItem.itemCode} 
                   onChange={(e) => setCurrentItem({...currentItem, itemCode: e.target.value})} 
                 />
               </div>
+              
               <div>
-                <label className="block text-sm font-semibold mb-1">Fator</label>
-                <input 
-                  type="number" 
-                  step="0.1"
-                  className="w-full p-2 border rounded-lg" 
-                  placeholder="Ex: 3.5" 
-                  value={currentItem.factor} 
-                  onChange={(e) => setCurrentItem({...currentItem, factor: e.target.value})} 
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div>
-                <label className="block text-sm font-semibold mb-1">Valor Base (R$)</label>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  className="w-full p-2 border rounded-lg" 
-                  placeholder="0.00" 
-                  value={currentItem.baseValue} 
-                  onChange={(e) => setCurrentItem({...currentItem, baseValue: e.target.value})} 
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold mb-1">Parcelas (X)</label>
+                <label className="block text-sm font-semibold mb-1 text-gray-700">Quantidade</label>
                 <input 
                   type="number" 
                   min="1"
-                  className="w-full p-2 border rounded-lg" 
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none" 
                   placeholder="1" 
                   value={currentItem.quantity} 
                   onChange={(e) => setCurrentItem({...currentItem, quantity: e.target.value})} 
                 />
               </div>
-            </div>
 
-            <div className="mb-3">
-              <label className="block text-sm font-semibold mb-1">Valor Unitário (R$)</label>
-              <input 
-                type="number" 
-                step="0.01"
-                className="w-full p-2 border rounded-lg font-bold text-green-600" 
-                placeholder="0.00" 
-                value={currentItem.unitPrice} 
-                onChange={(e) => setCurrentItem({...currentItem, unitPrice: e.target.value})} 
-              />
-              <p className="text-xs text-gray-500 mt-1">Calculado automaticamente ou digite manualmente</p>
-            </div>
-
-            {currentItem.unitPrice && parseFloat(currentItem.unitPrice) > 0 && (
-              <div className="bg-green-50 p-3 rounded-lg border border-green-300 mb-3">
-                <p className="text-sm text-gray-700">
-                  <strong>Total deste item:</strong> {currentItem.quantity || 1} × R$ {parseFloat(currentItem.unitPrice).toFixed(2)} = 
-                  <span className="text-xl font-bold text-green-600 ml-2">
-                    R$ {((parseInt(currentItem.quantity) || 1) * parseFloat(currentItem.unitPrice)).toFixed(2)}
-                  </span>
-                </p>
+              <div>
+                <label className="block text-sm font-semibold mb-1 text-gray-700">Fator</label>
+                <input 
+                  type="number" 
+                  step="0.1"
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none" 
+                  placeholder="Ex: 3.5" 
+                  value={currentItem.factor} 
+                  onChange={(e) => setCurrentItem({...currentItem, factor: e.target.value})} 
+                />
               </div>
-            )}
+              
+              <div>
+                <label className="block text-sm font-semibold mb-1 text-gray-700">Valor Base (R$)</label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none" 
+                  placeholder="0.00" 
+                  value={currentItem.baseValue} 
+                  onChange={(e) => setCurrentItem({...currentItem, baseValue: e.target.value})} 
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold mb-1 text-gray-700">Valor Unitário (R$) *</label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  className="w-full p-3 border-2 border-green-400 rounded-lg font-bold text-lg text-green-700 focus:border-green-500 focus:outline-none" 
+                  placeholder="0.00" 
+                  value={currentItem.unitPrice} 
+                  onChange={(e) => setCurrentItem({...currentItem, unitPrice: e.target.value})} 
+                />
+                <p className="text-xs text-gray-500 mt-1">Calculado automaticamente (Fator × Base) ou digite manualmente</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-1 text-gray-700">Parcelas deste produto</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  className="w-full p-3 border-2 border-blue-400 rounded-lg font-semibold text-blue-700 focus:border-blue-500 focus:outline-none" 
+                  placeholder="1" 
+                  value={currentItem.installmentsPerItem} 
+                  onChange={(e) => setCurrentItem({...currentItem, installmentsPerItem: e.target.value})} 
+                />
+              </div>
+
+              {currentItem.unitPrice && parseFloat(currentItem.unitPrice) > 0 && (
+                <div className="md:col-span-2 bg-green-50 p-4 rounded-lg border-2 border-green-300">
+                  <p className="text-sm text-gray-700 mb-1">
+                    <strong>Subtotal deste item:</strong> {currentItem.quantity || 1} × R$ {parseFloat(currentItem.unitPrice).toFixed(2)} {currentItem.installmentsPerItem && parseInt(currentItem.installmentsPerItem) > 1 ? `em ${currentItem.installmentsPerItem}x` : ''}
+                  </p>
+                  <p className="text-2xl font-bold text-green-600">
+                    R$ {((parseInt(currentItem.quantity) || 1) * parseFloat(currentItem.unitPrice)).toFixed(2)}
+                  </p>
+                </div>
+              )}
+            </div>
 
             <button
               type="button"
               onClick={addItemToSale}
-              className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 font-bold"
+              className="w-full mt-4 bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 font-bold text-lg shadow-lg transition-all hover:scale-[1.02]"
             >
-              ➕ Adicionar à Lista
+              ➕ Adicionar ao Carrinho
             </button>
           </div>
 
-          {/* Lista de itens adicionados */}
+          {/* Carrinho - Grade de Produtos */}
           {saleItems.length > 0 && (
-            <div className="p-4 bg-gradient-to-br from-green-50 to-blue-50 border-2 border-green-300 rounded-xl">
-              <h3 className="font-bold text-green-800 mb-3">📦 Produtos Adicionados ({saleItems.length})</h3>
-              <div className="space-y-2 mb-4">
+            <div className="bg-white border-2 border-green-400 rounded-xl shadow-lg overflow-hidden">
+              <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white p-4">
+                <h3 className="font-bold text-xl flex items-center gap-2">
+                  <span className="text-2xl">🛒</span> Carrinho de Compras ({saleItems.length} {saleItems.length === 1 ? 'produto' : 'produtos'})
+                </h3>
+              </div>
+
+              {/* Tabela de Produtos - Desktop */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-100 border-b-2 border-gray-300">
+                    <tr>
+                      <th className="text-left p-3 font-bold text-gray-700">Produto</th>
+                      <th className="text-center p-3 font-bold text-gray-700">Código</th>
+                      <th className="text-center p-3 font-bold text-gray-700">Qtd</th>
+                      <th className="text-center p-3 font-bold text-gray-700">Parcelas</th>
+                      <th className="text-right p-3 font-bold text-gray-700">Valor Unit.</th>
+                      <th className="text-right p-3 font-bold text-gray-700">Total</th>
+                      <th className="text-center p-3 font-bold text-gray-700">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {saleItems.map((item, index) => (
+                      <tr key={index} className="border-b hover:bg-gray-50 transition">
+                        <td className="p-3">
+                          <p className="font-semibold text-gray-800">{item.itemName}</p>
+                          {item.factor && item.baseValue && (
+                            <p className="text-xs text-gray-500">Fator: {item.factor} × R$ {item.baseValue.toFixed(2)}</p>
+                          )}
+                        </td>
+                        <td className="p-3 text-center text-gray-600">{item.itemCode || '—'}</td>
+                        <td className="p-3 text-center font-semibold text-blue-600">{item.quantity}×</td>
+                        <td className="p-3 text-center">
+                          <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-semibold text-sm">
+                            {item.installmentsPerItem}× parcelas
+                          </span>
+                        </td>
+                        <td className="p-3 text-right font-semibold text-green-600">R$ {item.unitPrice.toFixed(2)}</td>
+                        <td className="p-3 text-right font-bold text-green-700 text-lg">R$ {item.totalValue.toFixed(2)}</td>
+                        <td className="p-3 text-center">
+                          <button
+                            onClick={() => removeItemFromSale(index)}
+                            className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition"
+                            title="Remover produto"
+                          >
+                            🗑️
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Cards de Produtos - Mobile */}
+              <div className="md:hidden p-4 space-y-3">
                 {saleItems.map((item, index) => (
-                  <div key={index} className="bg-white p-3 rounded-lg border border-gray-200 flex justify-between items-start">
-                    <div className="flex-1">
-                      <p className="font-bold text-gray-800">{item.itemName}</p>
-                      {item.itemCode && <p className="text-xs text-gray-600">Código: {item.itemCode}</p>}
-                      <p className="text-sm text-gray-700 mt-1">
-                        {item.quantity}× R$ {item.unitPrice.toFixed(2)} = 
-                        <span className="font-bold text-green-600 ml-1">R$ {item.totalValue.toFixed(2)}</span>
-                      </p>
+                  <div key={index} className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex-1">
+                        <p className="font-bold text-gray-800">{item.itemName}</p>
+                        {item.itemCode && <p className="text-xs text-gray-600">Código: {item.itemCode}</p>}
+                      </div>
+                      <button
+                        onClick={() => removeItemFromSale(index)}
+                        className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 ml-2"
+                      >
+                        🗑️
+                      </button>
                     </div>
-                    <button
-                      onClick={() => removeItemFromSale(index)}
-                      className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 ml-2"
-                    >
-                      🗑️
-                    </button>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-gray-600">Quantidade:</span>
+                        <span className="font-semibold ml-1">{item.quantity}×</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Parcelas:</span>
+                        <span className="font-semibold ml-1">{item.installmentsPerItem}×</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Valor Unit.:</span>
+                        <span className="font-semibold text-green-600 ml-1">R$ {item.unitPrice.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Total:</span>
+                        <span className="font-bold text-green-700 text-lg ml-1">R$ {item.totalValue.toFixed(2)}</span>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
 
-              <div className="border-t-2 border-green-400 pt-3">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="font-bold text-gray-700">Subtotal:</span>
-                  <span className="text-xl font-bold text-green-600">
-                    R$ {saleItems.reduce((sum, item) => sum + item.totalValue, 0).toFixed(2)}
-                  </span>
-                </div>
-
-                {/* Campo de desconto */}
-                <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-300 mb-2">
-                  <label className="block text-sm font-semibold mb-1 text-yellow-800">Desconto (R$)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={discountValue}
-                    onChange={(e) => setDiscountValue(e.target.value)}
-                    className="w-full p-2 border-2 border-yellow-400 rounded-lg text-lg font-bold text-red-600"
-                  />
-                </div>
-
-                {discountValue && parseFloat(discountValue) > 0 && (
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="font-semibold text-red-600">Desconto:</span>
-                    <span className="text-lg font-bold text-red-600">
-                      - R$ {parseFloat(discountValue).toFixed(2)}
+              {/* Resumo do Carrinho */}
+              <div className="bg-gradient-to-br from-gray-50 to-blue-50 p-6 border-t-2 border-gray-300">
+                <div className="max-w-md ml-auto space-y-3">
+                  <div className="flex justify-between items-center text-lg">
+                    <span className="font-semibold text-gray-700">Subtotal ({saleItems.length} {saleItems.length === 1 ? 'item' : 'itens'}):</span>
+                    <span className="text-2xl font-bold text-gray-800">
+                      R$ {saleItems.reduce((sum, item) => sum + item.totalValue, 0).toFixed(2)}
                     </span>
+                  </div>
+
+                  {/* Campo de desconto */}
+                  <div className="bg-yellow-50 p-4 rounded-lg border-2 border-yellow-300">
+                    <label className="block text-sm font-bold mb-2 text-yellow-800">💰 Desconto (R$)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={discountValue}
+                      onChange={(e) => setDiscountValue(e.target.value)}
+                      className="w-full p-3 border-2 border-yellow-400 rounded-lg text-lg font-bold text-red-600 focus:border-yellow-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {discountValue && parseFloat(discountValue) > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold text-red-600">Desconto:</span>
+                      <span className="text-xl font-bold text-red-600">
+                        - R$ {parseFloat(discountValue).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center p-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg shadow-lg">
+                    <span className="text-xl font-bold">TOTAL GERAL:</span>
+                    <span className="text-3xl font-bold">
+                      R$ {(saleItems.reduce((sum, item) => sum + item.totalValue, 0) - (parseFloat(discountValue) || 0)).toFixed(2)}
+                    </span>
+                  </div>
+
+                  <p className="text-sm text-gray-600 text-center mt-3">
+                    Configure as opções de pagamento abaixo 👇
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Seção de Finalização da Compra */}
+          {saleItems.length > 0 && (
+            <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-400 rounded-xl shadow-lg">
+              <h3 className="font-bold text-blue-900 mb-4 text-xl flex items-center gap-2">
+                <span className="text-2xl">💳</span> Como deseja pagar?
+              </h3>
+
+              <div className="space-y-4">
+                {/* Número de Parcelas */}
+                <div>
+                  <label className="block font-bold text-gray-800 mb-2">📊 Número de Parcelas</label>
+                  <input 
+                    type="number" 
+                    className="w-full p-3 border-2 border-blue-400 rounded-lg text-lg font-semibold focus:border-blue-600 focus:outline-none" 
+                    min="1" 
+                    value={installments} 
+                    onChange={(e) => { 
+                      setInstallments(parseInt(e.target.value)); 
+                      if (parseInt(e.target.value) > 1) setDiscountValue(''); 
+                    }} 
+                    placeholder="Digite o número de parcelas" 
+                  />
+                  <p className="text-xs text-gray-600 mt-1">
+                    {installments > 1 
+                      ? `Compra será dividida em ${installments}× parcelas`
+                      : 'Pagamento à vista (1 parcela)'
+                    }
+                  </p>
+                </div>
+
+                {/* Data do Primeiro Pagamento (se parcelado) */}
+                {installments > 1 && (
+                  <div className="p-4 bg-white border-2 border-indigo-300 rounded-lg">
+                    <label className="block font-bold text-indigo-800 mb-2">📅 Mês do Primeiro Pagamento</label>
+                    <input 
+                      type="month" 
+                      className="w-full p-3 border-2 border-indigo-400 rounded-lg text-lg font-semibold focus:border-indigo-600 focus:outline-none" 
+                      value={firstPaymentDate} 
+                      onChange={(e) => setFirstPaymentDate(e.target.value)}
+                      min={new Date().toISOString().split('T')[0].substring(0, 7)}
+                    />
+                    <p className="text-sm text-indigo-700 mt-2">
+                      ✨ Cliente inicia pagamento em {new Date(firstPaymentDate + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                    </p>
                   </div>
                 )}
 
-                <div className="flex justify-between items-center p-3 bg-green-600 text-white rounded-lg">
-                  <span className="text-lg font-bold">TOTAL DA COMPRA:</span>
-                  <span className="text-2xl font-bold">
-                    R$ {(saleItems.reduce((sum, item) => sum + item.totalValue, 0) - (parseFloat(discountValue) || 0)).toFixed(2)}
-                  </span>
-                </div>
+                {/* Desconto à Vista (se 1 parcela) */}
+                {installments === 1 && (
+                  <div className="p-4 bg-green-50 border-2 border-green-400 rounded-lg">
+                    <h4 className="font-bold text-green-800 mb-3 flex items-center gap-2">
+                      💰 Desconto para Pagamento à Vista
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold mb-1 text-green-700">Valor do Desconto (R$)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={discountValue}
+                          onChange={(e) => setDiscountValue(e.target.value)}
+                          className="w-full p-3 border-2 border-green-400 rounded-lg text-lg font-bold text-green-600 focus:border-green-500 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold mb-1 text-green-700">Valor Final</label>
+                        <div className="w-full p-3 bg-white border-2 border-green-500 rounded-lg text-lg font-bold text-green-600">
+                          R$ {(saleItems.reduce((sum, item) => sum + item.totalValue, 0) - (parseFloat(discountValue) || 0)).toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                    {discountValue && parseFloat(discountValue) > 0 && (
+                      <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
+                        <span>✅</span>
+                        <span>Desconto de R$ {parseFloat(discountValue).toFixed(2)} será aplicado</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Opção de Arredondamento de Parcelas (se parcelado) */}
+                {installments > 1 && (
+                  <label className="flex items-center gap-3 cursor-pointer p-3 bg-white rounded-lg border-2 border-purple-200 hover:border-purple-400 transition">
+                    <input 
+                      type="checkbox" 
+                      checked={roundUpInstallments} 
+                      onChange={(e) => setRoundUpInstallments(e.target.checked)} 
+                      className="w-6 h-6 accent-purple-600" 
+                    />
+                    <div>
+                      <span className="font-semibold text-purple-800">⬆️ Arredondar parcelas para cima</span>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Facilita o pagamento arredondando cada parcela para o valor inteiro mais próximo
+                      </p>
+                    </div>
+                  </label>
+                )}
               </div>
             </div>
           )}
