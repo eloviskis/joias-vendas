@@ -4103,6 +4103,8 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
   const [saleToDelete, setSaleToDelete] = useState<any>(null);
   const [deleteReason, setDeleteReason] = useState('');
   const [clientSearch, setClientSearch] = useState('');
+  const [editingPaymentDate, setEditingPaymentDate] = useState<any>(null);
+  const [newPaymentDate, setNewPaymentDate] = useState('');
 
   const filteredClients = useMemo(() => {
     if (!clientSearch.trim()) return clients;
@@ -4205,6 +4207,50 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
     }
   };
 
+  const handleUpdatePaymentDate = async () => {
+    if (!newPaymentDate) {
+      alert('Selecione uma data válida!');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/sales/${editingPaymentDate.id}/update-payment-date`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          firstPaymentDate: newPaymentDate
+        })
+      });
+
+      if (res.ok) {
+        await loadAllSales();
+        if (selectedClient) {
+          await loadClientSales(selectedClient.id);
+        }
+        setEditingPaymentDate(null);
+        setNewPaymentDate('');
+        alert('Data de pagamento atualizada com sucesso!');
+      } else {
+        const error = await res.json();
+        alert(`Erro ao atualizar: ${error.error || 'Erro desconhecido'}`);
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar data:', error);
+      alert('Erro ao atualizar data de pagamento');
+    }
+  };
+        const error = await res.json();
+        alert(`Erro ao excluir venda: ${error.error || 'Erro desconhecido'}`);
+      }
+    } catch (error) {
+      console.error('Erro ao excluir venda:', error);
+      alert('Erro ao excluir venda');
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       {/* Lista de Clientes */}
@@ -4288,12 +4334,30 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
                       <div className="flex-1">
                         <h3 className="text-lg font-bold text-gray-800">{sale.itemName}</h3>
                         <p className="text-sm text-gray-500">{formatDate(sale.saleDate)}</p>
+                        {sale.installments > 1 && sale.installmentsR && sale.installmentsR.length > 0 && (
+                          <p className="text-xs text-blue-600 mt-1">
+                            📅 Primeiro pagamento: {new Date(sale.installmentsR[0].dueDate).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                          </p>
+                        )}
                       </div>
-                      <div className="text-right flex items-start gap-3">
+                      <div className="text-right flex items-start gap-2">
                         <div>
                           <p className="text-xl font-bold text-green-600">{formatCurrency(sale.totalValue)}</p>
                           <p className="text-xs text-gray-500">{sale.installments}x parcelas</p>
                         </div>
+                        {sale.installments > 1 && (
+                          <button
+                            onClick={() => {
+                              setEditingPaymentDate(sale);
+                              const firstDue = new Date(sale.installmentsR[0].dueDate);
+                              setNewPaymentDate(`${firstDue.getFullYear()}-${String(firstDue.getMonth() + 1).padStart(2, '0')}`);
+                            }}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded transition"
+                            title="Editar data do primeiro pagamento"
+                          >
+                            📅
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDeleteClick(sale)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded transition"
@@ -4414,6 +4478,54 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
                 disabled={!deleteReason.trim()}
               >
                 Confirmar Exclusão
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Edição de Data de Pagamento */}
+      {editingPaymentDate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">📅 Editar Data do Primeiro Pagamento</h3>
+            <p className="text-gray-600 mb-4">
+              Venda: <strong>{editingPaymentDate.itemName}</strong>
+            </p>
+            <p className="text-sm text-gray-500 mb-4">
+              {editingPaymentDate.installments} parcelas • {formatCurrency(editingPaymentDate.totalValue)}
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Mês do Primeiro Pagamento:
+              </label>
+              <input
+                type="month"
+                value={newPaymentDate}
+                onChange={(e) => setNewPaymentDate(e.target.value)}
+                className="w-full px-3 py-3 border-2 border-blue-400 rounded-lg focus:border-blue-600 focus:outline-none text-lg font-semibold"
+                min={new Date().toISOString().split('T')[0].substring(0, 7)}
+                autoFocus
+              />
+              <p className="text-xs text-gray-600 mt-2">
+                ⚠️ As datas de todas as parcelas serão recalculadas
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setEditingPaymentDate(null);
+                  setNewPaymentDate('');
+                }}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleUpdatePaymentDate}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              >
+                Atualizar Data
               </button>
             </div>
           </div>

@@ -319,6 +319,48 @@ app.delete('/sales/:id', async (req: any, reply) => {
   }
 });
 
+// Atualizar data do primeiro pagamento de uma venda
+app.put('/sales/:id/update-payment-date', async (req: any, reply) => {
+  const id = Number(req.params.id);
+  const { firstPaymentDate } = req.body;
+  
+  if (!firstPaymentDate) {
+    return reply.code(400).send({ error: 'Data do primeiro pagamento é obrigatória' });
+  }
+  
+  try {
+    // Buscar venda com parcelas
+    const sale = await prisma.sale.findUnique({
+      where: { id },
+      include: { installments: { orderBy: { sequence: 'asc' } } }
+    });
+    
+    if (!sale) {
+      return reply.code(404).send({ error: 'Venda não encontrada' });
+    }
+    
+    // Converter firstPaymentDate (YYYY-MM) para Date
+    const [year, month] = firstPaymentDate.split('-').map(Number);
+    const baseDate = new Date(year, month - 1, 1);
+    
+    // Atualizar cada parcela
+    for (let i = 0; i < sale.installments.length; i++) {
+      const installment = sale.installments[i];
+      const newDueDate = new Date(baseDate);
+      newDueDate.setMonth(newDueDate.getMonth() + i);
+      
+      await prisma.installment.update({
+        where: { id: installment.id },
+        data: { dueDate: newDueDate }
+      });
+    }
+    
+    return { success: true, message: 'Datas atualizadas com sucesso' };
+  } catch (error: any) {
+    return reply.code(500).send({ error: error.message || 'Erro ao atualizar datas' });
+  }
+});
+
 app.post('/sales', async (req: any) => {
   const { clientId, itemName, itemCode, factor, itemType, baseValue, totalValue, paymentMethod, installments, roundUpInstallments, customInstallmentValues, saleDate, observations, sellerName, commission, imageBase64, sendCard, items, discount, firstPaymentDate } = req.body;
   
