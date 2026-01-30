@@ -155,6 +155,7 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
     workAddress: client.workAddress || ''
   });
   const [editingPaymentDate, setEditingPaymentDate] = useState<any>(null);
+  const [editingSale, setEditingSale] = useState<any>(null);
   const [newPaymentDate, setNewPaymentDate] = useState('');
 
   const handleSaveEdit = async () => {
@@ -573,6 +574,9 @@ function ScrollToTop() {
 }
 
 export default function App() {
+  // [No topo do componente App ou onde ficam os useState globais]
+  const [editingSale, setEditingSale] = useState<any>(null);
+
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [loggedEmail, setLoggedEmail] = useState(localStorage.getItem('loggedEmail') || '');
   const [email, setEmail] = useState('');
@@ -2562,16 +2566,6 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
               </div>
               
               <div>
-                <label className="block text-sm font-semibold mb-1 text-gray-700">Quantidade</label>
-                <input 
-                  type="number" 
-                  min="1"
-                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none" 
-                  placeholder="1" 
-                  value={currentItem.quantity} 
-                  onChange={(e) => setCurrentItem({...currentItem, quantity: e.target.value})} 
-                />
-              </div>
 
               <div>
                 <label className="block text-sm font-semibold mb-1 text-gray-700">Fator</label>
@@ -4524,12 +4518,35 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
                           </button>
                         )}
                         <button
+                          onClick={() => setEditingSale(sale)}
+                          className="p-2 text-yellow-600 hover:bg-yellow-50 rounded transition"
+                          title="Editar venda"
+                        >
+                          ✏️
+                        </button>
+                        <button
                           onClick={() => handleDeleteClick(sale)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded transition"
                           title="Excluir venda"
                         >
                           🗑️
                         </button>
+                            {/* Modal de Edição de Venda */}
+                            {editingSale && (
+                              <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                                <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 relative" onClick={e => e.stopPropagation()}>
+                                  <button
+                                    onClick={() => setEditingSale(null)}
+                                    className="absolute top-2 right-2 text-2xl text-gray-400 hover:text-gray-700"
+                                    title="Fechar"
+                                  >×</button>
+                                  <h2 className="text-2xl font-bold mb-4 text-purple-700">Editar Venda</h2>
+                                  <p className="mb-2 text-gray-700 font-semibold">Venda: {editingSale.itemName}</p>
+                                  {/* Aqui entra o formulário de edição de venda (campos, produtos, valores, etc) */}
+                                  <div className="text-gray-500">(Em breve: formulário de edição completo)</div>
+                                </div>
+                              </div>
+                            )}
                       </div>
                     </div>
 
