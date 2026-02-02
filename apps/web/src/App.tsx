@@ -275,6 +275,69 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
   const [editingPaymentDate, setEditingPaymentDate] = useState<any>(null);
   const [editingSale, setEditingSale] = useState<any>(null);
   const [newPaymentDate, setNewPaymentDate] = useState('');
+  
+  // Estados para formulário de edição de venda
+  const [editSaleForm, setEditSaleForm] = useState({
+    itemName: '',
+    itemCode: '',
+    totalValue: '',
+    observations: '',
+    sellerName: '',
+    isExchange: false
+  });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  
+  // Atualizar formulário quando editingSale mudar
+  useEffect(() => {
+    if (editingSale) {
+      setEditSaleForm({
+        itemName: editingSale.itemName || '',
+        itemCode: editingSale.itemCode || '',
+        totalValue: String(editingSale.totalValue || 0),
+        observations: editingSale.observations || '',
+        sellerName: editingSale.sellerName || '',
+        isExchange: editingSale.isExchange || false
+      });
+    }
+  }, [editingSale]);
+  
+  // Função para salvar edição da venda
+  const handleSaveEditSale = async () => {
+    if (!editingSale || !token) return;
+    
+    setIsSavingEdit(true);
+    try {
+      const res = await fetch(`${API_URL}/sales/${editingSale.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          itemName: editSaleForm.itemName,
+          itemCode: editSaleForm.itemCode || null,
+          totalValue: parseFloat(editSaleForm.totalValue),
+          observations: editSaleForm.observations || null,
+          sellerName: editSaleForm.sellerName || null,
+          isExchange: editSaleForm.isExchange
+        })
+      });
+      
+      if (res.ok) {
+        alert('✅ Venda atualizada com sucesso!');
+        setEditingSale(null);
+        window.location.reload();
+      } else {
+        const data = await res.json();
+        alert(`❌ Erro: ${data.error || 'Falha ao atualizar venda'}`);
+      }
+    } catch (err) {
+      alert('❌ Erro ao atualizar venda');
+      console.error(err);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   const handleSaveEdit = async () => {
     if (onUpdateClient) {
@@ -668,7 +731,7 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
         {/* Modal de Edição de Venda */}
         {editingSale && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditingSale(null)}>
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 relative" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 relative" onClick={e => e.stopPropagation()}>
               <button
                 onClick={() => setEditingSale(null)}
                 className="absolute top-2 right-2 text-2xl text-gray-400 hover:text-gray-700"
@@ -676,29 +739,90 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
               >×</button>
               <h2 className="text-2xl font-bold mb-4 text-purple-700">✏️ Editar Venda</h2>
               
-              <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                <p className="font-semibold text-gray-800">💎 {editingSale.itemName}</p>
-                {editingSale.itemCode && <p className="text-sm text-gray-600">Código: {editingSale.itemCode}</p>}
-                <p className="text-sm text-gray-600 mt-1">👤 {client.name}</p>
-                <p className="font-bold text-green-600 mt-2">{formatCurrency(editingSale.totalValue)}</p>
-                <p className="text-xs text-gray-500 mt-1">📅 {new Date(editingSale.saleDate).toLocaleDateString('pt-BR')}</p>
+              <div className="bg-gray-100 rounded-lg p-3 mb-4 text-sm">
+                <p className="text-gray-600">👤 Cliente: <span className="font-semibold">{client.name}</span></p>
+                <p className="text-gray-600">📅 Data: {new Date(editingSale.saleDate).toLocaleDateString('pt-BR')}</p>
               </div>
               
-              <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-4">
-                <p className="text-yellow-800 text-sm">
-                  <span className="font-bold">⚠️ Em desenvolvimento:</span> O formulário completo de edição de vendas estará disponível em breve.
-                </p>
-                <p className="text-yellow-700 text-xs mt-2">
-                  Por enquanto, você pode editar a data do primeiro pagamento usando o botão 📅.
-                </p>
+              {/* Formulário de Edição */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">💎 Nome do Item *</label>
+                  <input
+                    type="text"
+                    value={editSaleForm.itemName}
+                    onChange={e => setEditSaleForm({...editSaleForm, itemName: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Ex: Anel de Ouro"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">📦 Código</label>
+                    <input
+                      type="text"
+                      value={editSaleForm.itemCode}
+                      onChange={e => setEditSaleForm({...editSaleForm, itemCode: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      placeholder="Código do item"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">💰 Valor Total *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editSaleForm.totalValue}
+                      onChange={e => setEditSaleForm({...editSaleForm, totalValue: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      placeholder="0,00"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">👤 Vendedor</label>
+                  <input
+                    type="text"
+                    value={editSaleForm.sellerName}
+                    onChange={e => setEditSaleForm({...editSaleForm, sellerName: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Nome do vendedor"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">📝 Observações</label>
+                  <textarea
+                    value={editSaleForm.observations}
+                    onChange={e => setEditSaleForm({...editSaleForm, observations: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    rows={2}
+                    placeholder="Observações sobre a venda"
+                  />
+                </div>
+                
+                <div className="flex items-center gap-3 bg-orange-50 p-3 rounded-lg border border-orange-200">
+                  <input
+                    type="checkbox"
+                    id="editIsExchange"
+                    checked={editSaleForm.isExchange}
+                    onChange={e => setEditSaleForm({...editSaleForm, isExchange: e.target.checked})}
+                    className="w-5 h-5 text-orange-500 rounded focus:ring-orange-500"
+                  />
+                  <label htmlFor="editIsExchange" className="text-sm font-semibold text-orange-700 cursor-pointer">
+                    🔄 Esta é uma TROCA
+                  </label>
+                </div>
               </div>
               
-              <div className="flex gap-3">
+              <div className="flex gap-3 mt-6">
                 <button
                   onClick={() => setEditingSale(null)}
                   className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-3 rounded-lg font-semibold transition"
                 >
-                  Fechar
+                  Cancelar
                 </button>
                 <button
                   onClick={() => {
@@ -707,10 +831,17 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
                     setNewPaymentDate(`${firstDue.getFullYear()}-${String(firstDue.getMonth() + 1).padStart(2, '0')}`);
                     setEditingSale(null);
                   }}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-semibold transition"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-semibold transition"
                   disabled={!editingSale.installmentsR || editingSale.installmentsR.length <= 1}
                 >
-                  📅 Editar Data Pagamento
+                  📅 Datas
+                </button>
+                <button
+                  onClick={handleSaveEditSale}
+                  disabled={isSavingEdit || !editSaleForm.itemName || !editSaleForm.totalValue}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-semibold transition disabled:opacity-50"
+                >
+                  {isSavingEdit ? '⏳ Salvando...' : '✅ Salvar'}
                 </button>
               </div>
             </div>
@@ -760,6 +891,17 @@ function ScrollToTop() {
 export default function App() {
   // [No topo do componente App ou onde ficam os useState globais]
   const [editingSale, setEditingSale] = useState<any>(null);
+  
+  // Estados para formulário de edição de venda global
+  const [editSaleFormGlobal, setEditSaleFormGlobal] = useState({
+    itemName: '',
+    itemCode: '',
+    totalValue: '',
+    observations: '',
+    sellerName: '',
+    isExchange: false
+  });
+  const [isSavingEditGlobal, setIsSavingEditGlobal] = useState(false);
 
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [loggedEmail, setLoggedEmail] = useState(localStorage.getItem('loggedEmail') || '');
@@ -817,6 +959,58 @@ export default function App() {
       loadClients();
     }
   }, [token, page]);
+  
+  // Atualizar formulário global quando editingSale mudar
+  useEffect(() => {
+    if (editingSale) {
+      setEditSaleFormGlobal({
+        itemName: editingSale.itemName || '',
+        itemCode: editingSale.itemCode || '',
+        totalValue: String(editingSale.totalValue || 0),
+        observations: editingSale.observations || '',
+        sellerName: editingSale.sellerName || '',
+        isExchange: editingSale.isExchange || false
+      });
+    }
+  }, [editingSale]);
+  
+  // Função para salvar edição da venda global
+  const handleSaveEditSaleGlobal = async () => {
+    if (!editingSale || !token) return;
+    
+    setIsSavingEditGlobal(true);
+    try {
+      const res = await fetch(`/api/sales/${editingSale.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          itemName: editSaleFormGlobal.itemName,
+          itemCode: editSaleFormGlobal.itemCode || null,
+          totalValue: parseFloat(editSaleFormGlobal.totalValue),
+          observations: editSaleFormGlobal.observations || null,
+          sellerName: editSaleFormGlobal.sellerName || null,
+          isExchange: editSaleFormGlobal.isExchange
+        })
+      });
+      
+      if (res.ok) {
+        alert('✅ Venda atualizada com sucesso!');
+        setEditingSale(null);
+        window.location.reload();
+      } else {
+        const data = await res.json();
+        alert(`❌ Erro: ${data.error || 'Falha ao atualizar venda'}`);
+      }
+    } catch (err) {
+      alert('❌ Erro ao atualizar venda');
+      console.error(err);
+    } finally {
+      setIsSavingEditGlobal(false);
+    }
+  };
 
   const loadClients = async () => {
     const res = await fetch('/api/clients', {
@@ -2179,7 +2373,7 @@ export default function App() {
       {/* Modal de Edição de Venda (Global) */}
       {editingSale && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditingSale(null)}>
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 relative" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 relative" onClick={e => e.stopPropagation()}>
             <button
               onClick={() => setEditingSale(null)}
               className="absolute top-2 right-2 text-2xl text-gray-400 hover:text-gray-700"
@@ -2187,36 +2381,90 @@ export default function App() {
             >×</button>
             <h2 className="text-2xl font-bold mb-4 text-purple-700">✏️ Editar Venda</h2>
             
-            <div className={`rounded-lg p-4 mb-4 ${editingSale.isExchange ? 'bg-orange-50 border-2 border-orange-300' : 'bg-gray-50'}`}>
-              <div className="flex items-center gap-2 flex-wrap mb-2">
-                <p className="font-semibold text-gray-800">💎 {editingSale.itemName}</p>
-                {editingSale.isExchange && (
-                  <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                    🔄 TROCA
-                  </span>
-                )}
+            <div className="bg-gray-100 rounded-lg p-3 mb-4 text-sm">
+              <p className="text-gray-600">👤 Cliente: <span className="font-semibold">{editingSale.client?.name || 'Não identificado'}</span></p>
+              <p className="text-gray-600">📅 Data: {new Date(editingSale.saleDate || editingSale.date).toLocaleDateString('pt-BR')}</p>
+            </div>
+            
+            {/* Formulário de Edição */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">💎 Nome do Item *</label>
+                <input
+                  type="text"
+                  value={editSaleFormGlobal.itemName}
+                  onChange={e => setEditSaleFormGlobal({...editSaleFormGlobal, itemName: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="Ex: Anel de Ouro"
+                />
               </div>
-              {editingSale.itemCode && <p className="text-sm text-gray-600">Código: {editingSale.itemCode}</p>}
-              <p className="text-sm text-gray-600 mt-1">👤 {editingSale.client?.name || 'Cliente não identificado'}</p>
-              <p className="font-bold text-green-600 mt-2">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(editingSale.totalValue)}</p>
-              <p className="text-xs text-gray-500 mt-1">📅 {new Date(editingSale.saleDate || editingSale.date).toLocaleDateString('pt-BR')}</p>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">📦 Código</label>
+                  <input
+                    type="text"
+                    value={editSaleFormGlobal.itemCode}
+                    onChange={e => setEditSaleFormGlobal({...editSaleFormGlobal, itemCode: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Código do item"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">💰 Valor Total *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editSaleFormGlobal.totalValue}
+                    onChange={e => setEditSaleFormGlobal({...editSaleFormGlobal, totalValue: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="0,00"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">👤 Vendedor</label>
+                <input
+                  type="text"
+                  value={editSaleFormGlobal.sellerName}
+                  onChange={e => setEditSaleFormGlobal({...editSaleFormGlobal, sellerName: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="Nome do vendedor"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">📝 Observações</label>
+                <textarea
+                  value={editSaleFormGlobal.observations}
+                  onChange={e => setEditSaleFormGlobal({...editSaleFormGlobal, observations: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  rows={2}
+                  placeholder="Observações sobre a venda"
+                />
+              </div>
+              
+              <div className="flex items-center gap-3 bg-orange-50 p-3 rounded-lg border border-orange-200">
+                <input
+                  type="checkbox"
+                  id="editIsExchangeGlobal"
+                  checked={editSaleFormGlobal.isExchange}
+                  onChange={e => setEditSaleFormGlobal({...editSaleFormGlobal, isExchange: e.target.checked})}
+                  className="w-5 h-5 text-orange-500 rounded focus:ring-orange-500"
+                />
+                <label htmlFor="editIsExchangeGlobal" className="text-sm font-semibold text-orange-700 cursor-pointer">
+                  🔄 Esta é uma TROCA
+                </label>
+              </div>
             </div>
             
-            <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-4">
-              <p className="text-yellow-800 text-sm">
-                <span className="font-bold">⚠️ Em desenvolvimento:</span> O formulário completo de edição de vendas estará disponível em breve.
-              </p>
-              <p className="text-yellow-700 text-xs mt-2">
-                Por enquanto, você pode editar a data do primeiro pagamento usando o botão 📅 na lista de vendas.
-              </p>
-            </div>
-            
-            <div className="flex gap-3">
+            <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setEditingSale(null)}
                 className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-3 rounded-lg font-semibold transition"
               >
-                Fechar
+                Cancelar
               </button>
               <button
                 onClick={() => {
@@ -2226,9 +2474,16 @@ export default function App() {
                     setEditingSale(null);
                   }
                 }}
-                className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg font-semibold transition"
+                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg font-semibold transition"
               >
-                📋 Ver Carnê Completo
+                📋 Carnê
+              </button>
+              <button
+                onClick={handleSaveEditSaleGlobal}
+                disabled={isSavingEditGlobal || !editSaleFormGlobal.itemName || !editSaleFormGlobal.totalValue}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-semibold transition disabled:opacity-50"
+              >
+                {isSavingEditGlobal ? '⏳ Salvando...' : '✅ Salvar'}
               </button>
             </div>
           </div>

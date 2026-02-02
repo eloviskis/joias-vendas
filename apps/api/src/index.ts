@@ -383,7 +383,8 @@ app.put('/sales/:id', async (req: any, reply) => {
     items,
     discount,
     firstPaymentDate,
-    recalculateInstallments
+    recalculateInstallments,
+    isExchange
   } = req.body;
   
   try {
@@ -422,7 +423,8 @@ app.put('/sales/:id', async (req: any, reply) => {
         observations: observations !== undefined ? observations : existingSale.observations,
         sellerName: sellerName !== undefined ? sellerName : existingSale.sellerName,
         commission: commission !== undefined ? commission : existingSale.commission,
-        discount: discount !== undefined ? discount : existingSale.discount
+        discount: discount !== undefined ? discount : existingSale.discount,
+        isExchange: isExchange !== undefined ? isExchange : existingSale.isExchange
       }
     });
     

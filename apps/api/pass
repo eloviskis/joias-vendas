@@ -1,0 +1,5 @@
+ id |      email      |                      passwordHash                      |                   adminPasswordHash                    
+----+-----------------+--------------------------------------------------------+--------------------------------------------------------
+  1 | admin@joias.com | a0/trLiDIXqYKKSSz1vGkb.UUocbaN5iSAMwqOI9qQGtIHN5zOKALO | a0/trLiDIXqYKKSSz1vGkb.UUocbaN5iSAMwqOI9qQGtIHN5zOKALO
+(1 row)
+
