@@ -13,7 +13,14 @@ const versionCode = `${buildDateStr.replace(/-/g, '')}-${String(now.getHours()).
 
 export default defineConfig({
   plugins: [react()],
-  server: { proxy: { '/api': 'http://localhost:3000' } },
+  server: { 
+    proxy: { 
+      '/api': {
+        target: 'http://localhost:3000',
+        rewrite: (path) => path.replace(/^\/api/, '')
+      }
+    } 
+  },
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(`v1.0-${versionCode}`),
     'import.meta.env.VITE_BUILD_DATE': JSON.stringify(buildDateStr),

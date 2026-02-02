@@ -42,97 +42,215 @@ function PaymentModal({ installment, onConfirm, onClose }: Readonly<{
           <div className="flex justify-between items-start">
             <div>
               <h2 className="text-xl font-bold">💰 Registrar Pagamento</h2>
-              <p className="text-sm mt-1 opacity-90">Confirme a data do pagamento</p>
+              <p className="text-sm mt-1 opacity-90">Parcela {installment.sequence}</p>
             </div>
             <button onClick={onClose} className="text-2xl hover:opacity-70">×</button>
           </div>
         </div>
 
         <div className="p-6">
-          <div className="bg-gray-50 rounded-lg p-4 mb-6">
-            <p className="font-semibold text-gray-800">👤 {client.name}</p>
-            <p className="text-sm text-gray-600">📱 {client.phone}</p>
-            <p className="text-sm text-gray-600 mt-2">💎 {sale.itemName}</p>
-            <p className="font-bold text-green-600 mt-1">{formatCurrency(sale.totalValue)} em {sale.installments}x</p>
+          <div className="bg-gray-50 rounded-lg p-4 mb-4">
+            <p className="font-semibold text-gray-800">👤 {installment.sale.client?.name || 'Cliente'}</p>
+            <p className="text-sm text-gray-600 mt-1">💎 {installment.sale.itemName}</p>
+            <p className="font-bold text-green-600 text-lg mt-2">{formatCurrency(installment.amount)}</p>
           </div>
 
-          <div className="space-y-3">
-            <button
-              onClick={sendWhatsApp}
-              className="w-full bg-green-500 hover:bg-green-600 text-white p-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition"
-            >
-              <span className="text-xl">📱</span>
-              Enviar Carnê via WhatsApp
-            </button>
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">📅 Data do Pagamento</label>
+            <input
+              type="date"
+              value={paidAt}
+              onChange={(e) => setPaidAt(e.target.value)}
+              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none"
+            />
+          </div>
 
-            {sale.photoUrl && (
-              <button
-                onClick={async () => {
-                  const filename = sale.photoUrl.split('/').pop();
-                  const downloadUrl = `/api/download/${filename}`;
-                  
-                  const text =
-                    `📸 *Foto da Peça* 📸\n\n` +
-                    `💍 *${sale.itemName}*\n` +
-                    `${sale.itemCode ? `📦 Código: ${sale.itemCode}\n` : ''}` +
-                    `💰 Valor: *${formatCurrency(sale.totalValue)}*`;
-                  const phone = client.phone.replaceAll(/\D/g, '');
-                  
-                  try {
-                    const res = await fetch(downloadUrl);
-                    const blob = await res.blob();
-                    const shareFile = new File([blob], `foto-${sale.itemName.replace(/\s+/g, '-')}.jpg`, { type: 'image/jpeg' });
-                    if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
-                      await navigator.share({ files: [shareFile], text });
-                      return;
-                    }
-                  } catch (err) {
-                    console.warn('Web Share API falhou, usando fallback:', err);
-                  }
-
-                  // Fallback: baixar e abrir WhatsApp com texto
-                  const downloadLink = document.createElement('a');
-                  downloadLink.href = downloadUrl;
-                  downloadLink.download = `foto-${sale.itemName.replace(/\s+/g, '-')}.jpg`;
-                  document.body.appendChild(downloadLink);
-                  downloadLink.click();
-                  document.body.removeChild(downloadLink);
-                  
-                  setTimeout(() => {
-                    const url = `https://wa.me/55${phone}?text=${encodeURIComponent(text)}`;
-                    window.open(url, '_blank');
-                  }, 500);
-                }}
-                className="w-full bg-cyan-500 hover:bg-cyan-600 text-white p-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition"
-              >
-                <span className="text-xl">📸</span>
-                Enviar Foto + Carnê
-              </button>
-            )}
-
-            <button
-              onClick={copyToClipboard}
-              className="w-full bg-blue-500 hover:bg-blue-600 text-white p-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition"
-            >
-              <span className="text-xl">📋</span>
-              Copiar Texto
-            </button>
-
-            <button
-              onClick={printCarne}
-              className="w-full bg-purple-500 hover:bg-purple-600 text-white p-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition"
-            >
-              <span className="text-xl">🖨️</span>
-              Imprimir / Salvar PDF
-            </button>
-
+          <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 p-4 rounded-lg font-semibold transition"
+              className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 p-3 rounded-lg font-semibold transition"
             >
-              Fechar
+              Cancelar
+            </button>
+            <button
+              onClick={() => onConfirm(installment.id, paidAt)}
+              className="flex-1 bg-green-500 hover:bg-green-600 text-white p-3 rounded-lg font-semibold transition"
+            >
+              ✅ Confirmar
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Componente Modal de Compartilhamento de Carnê
+function ShareCarneModal({ sale, client, onClose }: Readonly<{ sale: any; client: any; onClose: () => void }>) {
+  const formatCurrency = (value: number) => 
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+  const generateCarneText = () => {
+    const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    let text = `💎 *VANI E ELO JOIAS*\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    text += `👤 *Cliente:* ${client.name}\n`;
+    text += `💍 *Peça:* ${sale.itemName}\n`;
+    if (sale.itemCode) text += `📦 *Código:* ${sale.itemCode}\n`;
+    text += `💰 *Valor Total:* ${formatCurrency(sale.totalValue)}\n`;
+    text += `📊 *Parcelas:* ${sale.installments || sale.installmentsR?.length || 1}x\n\n`;
+    
+    if (sale.installmentsR && sale.installmentsR.length > 0) {
+      text += `📅 *Parcelas:*\n`;
+      sale.installmentsR.forEach((inst: any, idx: number) => {
+        const date = new Date(inst.dueDate);
+        const monthName = months[date.getMonth()];
+        const status = inst.paid ? '✅' : '⏳';
+        text += `${status} ${idx + 1}ª - ${monthName}/${date.getFullYear()} - ${formatCurrency(inst.amount)}\n`;
+      });
+    }
+    
+    text += `\n━━━━━━━━━━━━━━━━━━━━`;
+    return text;
+  };
+
+  const sendWhatsApp = () => {
+    const text = generateCarneText();
+    const phone = client.phone?.replaceAll(/\D/g, '') || '';
+    const url = phone 
+      ? `https://wa.me/55${phone}?text=${encodeURIComponent(text)}`
+      : `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  };
+
+  const copyToClipboard = () => {
+    const text = generateCarneText();
+    navigator.clipboard.writeText(text);
+    alert('📋 Texto copiado para a área de transferência!');
+  };
+
+  const printCarne = () => {
+    const win = window.open('', '_blank');
+    if (!win) return;
+    
+    const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    let rows = '';
+    if (sale.installmentsR) {
+      sale.installmentsR.forEach((inst: any, idx: number) => {
+        const date = new Date(inst.dueDate);
+        rows += `<tr>
+          <td>${idx + 1}ª</td>
+          <td>${months[date.getMonth()]}/${date.getFullYear()}</td>
+          <td>${formatCurrency(inst.amount)}</td>
+          <td>${inst.paid ? '✅ Pago' : '⏳ Pendente'}</td>
+        </tr>`;
+      });
+    }
+    
+    win.document.write(`<!doctype html><html><head><title>Carnê - ${client.name}</title><style>
+      body { font-family: Arial, sans-serif; padding: 20px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+      th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
+      th { background: #f0f0f0; }
+      h1 { color: #7c3aed; }
+    </style></head><body>
+    <h1>💎 Vani e Elo Joias</h1>
+    <p><strong>Cliente:</strong> ${client.name}</p>
+    <p><strong>Peça:</strong> ${sale.itemName}</p>
+    <p><strong>Valor Total:</strong> ${formatCurrency(sale.totalValue)}</p>
+    <table>
+      <thead><tr><th>Parcela</th><th>Vencimento</th><th>Valor</th><th>Status</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <script>window.onload = () => setTimeout(() => window.print(), 400);</script>
+    </body></html>`);
+    win.document.close();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold text-gray-800">📤 Compartilhar Carnê</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
+        </div>
+        
+        <div className="bg-gray-50 rounded-lg p-4 mb-4">
+          <p className="font-semibold text-gray-800">👤 {client.name}</p>
+          <p className="text-sm text-gray-600">💎 {sale.itemName}</p>
+          <p className="font-bold text-green-600">{formatCurrency(sale.totalValue)}</p>
+        </div>
+        
+        <div className="space-y-3">
+          <button
+            onClick={sendWhatsApp}
+            className="w-full bg-green-500 hover:bg-green-600 text-white p-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition"
+          >
+            <span className="text-xl">📱</span>
+            Enviar via WhatsApp
+          </button>
+          
+          {sale.photoUrl && (
+            <button
+              onClick={async () => {
+                const filename = sale.photoUrl.split('/').pop();
+                const downloadUrl = `/api/download/${filename}`;
+                const text = `📸 *Foto da Peça* 📸\n\n💍 *${sale.itemName}*\n${sale.itemCode ? `📦 Código: ${sale.itemCode}\n` : ''}💰 Valor: *${formatCurrency(sale.totalValue)}*`;
+                const phone = client.phone?.replaceAll(/\D/g, '') || '';
+                
+                try {
+                  const res = await fetch(downloadUrl);
+                  const blob = await res.blob();
+                  const shareFile = new File([blob], `foto-${sale.itemName.replace(/\s+/g, '-')}.jpg`, { type: 'image/jpeg' });
+                  if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
+                    await navigator.share({ files: [shareFile], text });
+                    return;
+                  }
+                } catch (err) {
+                  console.warn('Web Share API falhou, usando fallback:', err);
+                }
+                
+                const downloadLink = document.createElement('a');
+                downloadLink.href = downloadUrl;
+                downloadLink.download = `foto-${sale.itemName.replace(/\s+/g, '-')}.jpg`;
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+                
+                setTimeout(() => {
+                  const url = `https://wa.me/55${phone}?text=${encodeURIComponent(text)}`;
+                  window.open(url, '_blank');
+                }, 500);
+              }}
+              className="w-full bg-cyan-500 hover:bg-cyan-600 text-white p-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition"
+            >
+              <span className="text-xl">📸</span>
+              Enviar Foto + Carnê
+            </button>
+          )}
+          
+          <button
+            onClick={copyToClipboard}
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white p-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition"
+          >
+            <span className="text-xl">📋</span>
+            Copiar Texto
+          </button>
+          
+          <button
+            onClick={printCarne}
+            className="w-full bg-purple-500 hover:bg-purple-600 text-white p-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition"
+          >
+            <span className="text-xl">🖨️</span>
+            Imprimir / Salvar PDF
+          </button>
+          
+          <button
+            onClick={onClose}
+            className="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 p-4 rounded-lg font-semibold transition"
+          >
+            Fechar
+          </button>
         </div>
       </div>
     </div>
@@ -384,12 +502,19 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
             const years = Object.keys(installmentsByYear).map(Number).sort((a, b) => a - b);
             
             return (
-              <div key={sale.id} className="border-2 border-gray-200 rounded-xl overflow-hidden">
+              <div key={sale.id} className={`border-2 rounded-xl overflow-hidden ${sale.isExchange ? 'border-orange-400 bg-orange-50' : 'border-gray-200'}`}>
                 {/* Cabeçalho da Venda */}
-                <div className="bg-purple-100 p-4 border-b">
+                <div className={`p-4 border-b ${sale.isExchange ? 'bg-orange-100' : 'bg-purple-100'}`}>
                   <div className="flex justify-between items-start flex-wrap gap-2">
                     <div className="flex-1">
-                      <h3 className="font-bold text-lg text-gray-800">💎 {sale.itemName}</h3>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-lg text-gray-800">💎 {sale.itemName}</h3>
+                        {sale.isExchange && (
+                          <span className="bg-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                            🔄 TROCA
+                          </span>
+                        )}
+                      </div>
                       {sale.itemCode && <p className="text-sm text-gray-600">Código: {sale.itemCode}</p>}
                       {sale.installmentsR && sale.installmentsR.length > 0 && (
                         <p className="text-xs text-blue-600 mt-1">
@@ -416,6 +541,13 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
                           📅
                         </button>
                       )}
+                      <button
+                        onClick={() => setEditingSale(sale)}
+                        className="p-2 text-yellow-600 hover:bg-yellow-200 rounded transition"
+                        title="Editar venda"
+                      >
+                        ✏️
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -527,6 +659,58 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
                   className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold"
                 >
                   Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Edição de Venda */}
+        {editingSale && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditingSale(null)}>
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 relative" onClick={e => e.stopPropagation()}>
+              <button
+                onClick={() => setEditingSale(null)}
+                className="absolute top-2 right-2 text-2xl text-gray-400 hover:text-gray-700"
+                title="Fechar"
+              >×</button>
+              <h2 className="text-2xl font-bold mb-4 text-purple-700">✏️ Editar Venda</h2>
+              
+              <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                <p className="font-semibold text-gray-800">💎 {editingSale.itemName}</p>
+                {editingSale.itemCode && <p className="text-sm text-gray-600">Código: {editingSale.itemCode}</p>}
+                <p className="text-sm text-gray-600 mt-1">👤 {client.name}</p>
+                <p className="font-bold text-green-600 mt-2">{formatCurrency(editingSale.totalValue)}</p>
+                <p className="text-xs text-gray-500 mt-1">📅 {new Date(editingSale.saleDate).toLocaleDateString('pt-BR')}</p>
+              </div>
+              
+              <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-4">
+                <p className="text-yellow-800 text-sm">
+                  <span className="font-bold">⚠️ Em desenvolvimento:</span> O formulário completo de edição de vendas estará disponível em breve.
+                </p>
+                <p className="text-yellow-700 text-xs mt-2">
+                  Por enquanto, você pode editar a data do primeiro pagamento usando o botão 📅.
+                </p>
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setEditingSale(null)}
+                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-3 rounded-lg font-semibold transition"
+                >
+                  Fechar
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingPaymentDate(editingSale);
+                    const firstDue = editingSale.installmentsR?.[0]?.dueDate ? new Date(editingSale.installmentsR[0].dueDate) : new Date();
+                    setNewPaymentDate(`${firstDue.getFullYear()}-${String(firstDue.getMonth() + 1).padStart(2, '0')}`);
+                    setEditingSale(null);
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-semibold transition"
+                  disabled={!editingSale.installmentsR || editingSale.installmentsR.length <= 1}
+                >
+                  📅 Editar Data Pagamento
                 </button>
               </div>
             </div>
@@ -1498,14 +1682,34 @@ export default function App() {
                   {recentSales.map((sale: any) => (
                     <div 
                       key={sale.id} 
-                      className="border-l-4 border-purple-600 pl-4 py-2 bg-gray-50 rounded cursor-pointer hover:bg-purple-50 transition"
-                      onClick={() => sale.client?.id && openClientModal(sale.client.id)}
+                      className={`border-l-4 pl-4 py-2 rounded hover:opacity-80 transition ${sale.isExchange ? 'border-orange-500 bg-orange-50' : 'border-purple-600 bg-gray-50 hover:bg-purple-50'}`}
                     >
-                      <p className="font-semibold text-gray-800">{sale.itemName}</p>
-                      <p className="text-sm text-gray-600 hover:text-purple-600">{sale.client?.name || 'Cliente não encontrado'}</p>
-                      <div className="flex justify-between items-center mt-1">
-                        <span className="text-green-600 font-bold">{formatCurrency(sale.totalValue)}</span>
-                        <span className="text-xs text-gray-500">{formatDate(sale.saleDate)}</span>
+                      <div className="flex justify-between items-start">
+                        <div 
+                          className="flex-1 cursor-pointer"
+                          onClick={() => sale.client?.id && openClientModal(sale.client.id)}
+                        >
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-gray-800">{sale.itemName}</p>
+                            {sale.isExchange && (
+                              <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                                🔄 TROCA
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600 hover:text-purple-600">{sale.client?.name || 'Cliente não encontrado'}</p>
+                          <div className="flex justify-between items-center mt-1">
+                            <span className="text-green-600 font-bold">{formatCurrency(sale.totalValue)}</span>
+                            <span className="text-xs text-gray-500">{formatDate(sale.saleDate)}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEditingSale(sale); }}
+                          className="p-2 text-yellow-600 hover:bg-yellow-100 rounded transition ml-2"
+                          title="Editar venda"
+                        >
+                          ✏️
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -1527,24 +1731,37 @@ export default function App() {
                     return (
                       <div 
                         key={inst.id} 
-                        className={`border-l-4 pl-4 py-2 rounded cursor-pointer hover:opacity-80 transition ${
+                        className={`border-l-4 pl-4 py-2 rounded hover:opacity-80 transition ${
                           isOverdue ? 'border-red-600 bg-red-50' : 
                           isDueSoon ? 'border-yellow-600 bg-yellow-50' : 
                           'border-blue-600 bg-blue-50'
                         }`}
-                        onClick={() => inst.sale.client?.id && openClientModal(inst.sale.client.id)}
                       >
-                        <p className="font-semibold text-gray-800 hover:text-purple-600">
-                          {inst.sale.client?.name || 'Cliente não encontrado'} - Parcela {inst.sequence}/{inst.sale.installments}
-                        </p>
-                        <p className="text-sm text-gray-600">{inst.sale.itemName}</p>
-                        <div className="flex justify-between items-center mt-2">
-                          <span className="font-bold text-gray-800">{formatCurrency(inst.amount)}</span>
-                          <span className={`text-xs ${isOverdue ? 'text-red-600' : isDueSoon ? 'text-yellow-600' : 'text-blue-600'}`}>
-                            {isOverdue ? `Atrasado ${Math.abs(daysUntilDue)} dias` :
-                             isDueSoon ? `Vence em ${daysUntilDue} dias` :
-                             formatDate(inst.dueDate)}
-                          </span>
+                        <div className="flex justify-between items-start">
+                          <div 
+                            className="flex-1 cursor-pointer"
+                            onClick={() => inst.sale.client?.id && openClientModal(inst.sale.client.id)}
+                          >
+                            <p className="font-semibold text-gray-800 hover:text-purple-600">
+                              {inst.sale.client?.name || 'Cliente não encontrado'} - Parcela {inst.sequence}/{inst.sale.installments}
+                            </p>
+                            <p className="text-sm text-gray-600">{inst.sale.itemName}</p>
+                            <div className="flex justify-between items-center mt-2">
+                              <span className="font-bold text-gray-800">{formatCurrency(inst.amount)}</span>
+                              <span className={`text-xs ${isOverdue ? 'text-red-600' : isDueSoon ? 'text-yellow-600' : 'text-blue-600'}`}>
+                                {isOverdue ? `Atrasado ${Math.abs(daysUntilDue)} dias` :
+                                 isDueSoon ? `Vence em ${daysUntilDue} dias` :
+                                 formatDate(inst.dueDate)}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setEditingSale(inst.sale); }}
+                            className="p-2 text-yellow-600 hover:bg-yellow-100 rounded transition ml-2"
+                            title="Editar venda"
+                          >
+                            ✏️
+                          </button>
                         </div>
                         <button 
                           onClick={(e) => { e.stopPropagation(); setPaymentModalInstallment(inst); }}
@@ -1647,16 +1864,32 @@ export default function App() {
                   <p className="text-gray-600 mb-4">Total de {allSales.length} venda(s) registrada(s)</p>
                   <div className="space-y-3">
                     {allSales.map((sale: any) => (
-                      <div key={sale.id} className="bg-gray-50 p-4 rounded-lg border">
+                      <div key={sale.id} className={`p-4 rounded-lg border ${sale.isExchange ? 'bg-orange-50 border-orange-300' : 'bg-gray-50'}`}>
                         <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-semibold text-purple-700">{sale.itemName}</p>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-semibold text-purple-700">{sale.itemName}</p>
+                              {sale.isExchange && (
+                                <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                                  🔄 TROCA
+                                </span>
+                              )}
+                            </div>
                             <p className="text-sm text-gray-600">👤 {sale.client?.name || 'Cliente não identificado'}</p>
                             <p className="text-sm text-gray-500">📅 {new Date(sale.date).toLocaleDateString('pt-BR')}</p>
                           </div>
-                          <div className="text-right">
-                            <p className="font-bold text-green-600">{formatCurrency(sale.totalValue)}</p>
-                            <p className="text-xs text-gray-500">{sale.installments?.length || 0} parcela(s)</p>
+                          <div className="text-right flex items-start gap-2">
+                            <div>
+                              <p className="font-bold text-green-600">{formatCurrency(sale.totalValue)}</p>
+                              <p className="text-xs text-gray-500">{sale.installments?.length || 0} parcela(s)</p>
+                            </div>
+                            <button
+                              onClick={() => setEditingSale(sale)}
+                              className="p-2 text-yellow-600 hover:bg-yellow-100 rounded transition"
+                              title="Editar venda"
+                            >
+                              ✏️
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1943,6 +2176,65 @@ export default function App() {
         </div>
       )}
 
+      {/* Modal de Edição de Venda (Global) */}
+      {editingSale && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditingSale(null)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 relative" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setEditingSale(null)}
+              className="absolute top-2 right-2 text-2xl text-gray-400 hover:text-gray-700"
+              title="Fechar"
+            >×</button>
+            <h2 className="text-2xl font-bold mb-4 text-purple-700">✏️ Editar Venda</h2>
+            
+            <div className={`rounded-lg p-4 mb-4 ${editingSale.isExchange ? 'bg-orange-50 border-2 border-orange-300' : 'bg-gray-50'}`}>
+              <div className="flex items-center gap-2 flex-wrap mb-2">
+                <p className="font-semibold text-gray-800">💎 {editingSale.itemName}</p>
+                {editingSale.isExchange && (
+                  <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                    🔄 TROCA
+                  </span>
+                )}
+              </div>
+              {editingSale.itemCode && <p className="text-sm text-gray-600">Código: {editingSale.itemCode}</p>}
+              <p className="text-sm text-gray-600 mt-1">👤 {editingSale.client?.name || 'Cliente não identificado'}</p>
+              <p className="font-bold text-green-600 mt-2">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(editingSale.totalValue)}</p>
+              <p className="text-xs text-gray-500 mt-1">📅 {new Date(editingSale.saleDate || editingSale.date).toLocaleDateString('pt-BR')}</p>
+            </div>
+            
+            <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-4">
+              <p className="text-yellow-800 text-sm">
+                <span className="font-bold">⚠️ Em desenvolvimento:</span> O formulário completo de edição de vendas estará disponível em breve.
+              </p>
+              <p className="text-yellow-700 text-xs mt-2">
+                Por enquanto, você pode editar a data do primeiro pagamento usando o botão 📅 na lista de vendas.
+              </p>
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setEditingSale(null)}
+                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-3 rounded-lg font-semibold transition"
+              >
+                Fechar
+              </button>
+              <button
+                onClick={() => {
+                  if (editingSale.client?.id) {
+                    setSelectedClientForModal(editingSale.client);
+                    setClientSalesForModal([editingSale]);
+                    setEditingSale(null);
+                  }
+                }}
+                className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg font-semibold transition"
+              >
+                📋 Ver Carnê Completo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Rodapé com Versão */}
       <footer className="bg-purple-800 text-white text-center py-4 mt-8 border-t-2 border-purple-500">
         <p className="text-sm font-semibold">
@@ -1991,8 +2283,8 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
   const [sellers, setSellers] = useState<string[]>([]);
   const [showSellerSuggestions, setShowSellerSuggestions] = useState(false);
   
-  // Estados para múltiplos itens
-  const [useMultipleItems, setUseMultipleItems] = useState(false);
+  // Estados para múltiplos itens (carrinho sempre ativo)
+  const useMultipleItems = true; // Carrinho sempre ativo
   const [saleItems, setSaleItems] = useState<Array<{
     itemName: string;
     itemCode?: string;
@@ -2001,6 +2293,7 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
     quantity: number;
     unitPrice: number;
     totalValue: number;
+    installmentsPerItem?: number;
   }>>([]);
   const [currentItem, setCurrentItem] = useState({
     itemName: '',
@@ -2016,6 +2309,10 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
     const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
     return nextMonth.toISOString().split('T')[0].substring(0, 7); // YYYY-MM
   });
+  
+  // Estado para marcar como troca e valor final editável
+  const [isExchange, setIsExchange] = useState(false);
+  const [finalValueOverride, setFinalValueOverride] = useState('');
 
   // Carregar vendedoras já usadas
   useEffect(() => {
@@ -2183,8 +2480,14 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
   };
 
   const handleSubmit = async () => {
-    if (!clientName || !itemName || !totalValue) {
-      alert('Preencha cliente, item e valor');
+    // Validação: precisa de cliente e pelo menos um item no carrinho
+    if (!clientName) {
+      alert('Preencha o nome do cliente');
+      return;
+    }
+    
+    if (saleItems.length === 0) {
+      alert('Adicione pelo menos um produto ao carrinho');
       return;
     }
 
@@ -2216,17 +2519,25 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
         clientId = client.id;
       }
       
+      // Calcular valor final (usa override se preenchido, senão calcula)
+      const calculatedTotal = saleItems.reduce((sum, item) => sum + item.totalValue, 0) - (parseFloat(discountValue) || 0);
+      const valorFinal = finalValueOverride && parseFloat(finalValueOverride) > 0 
+        ? parseFloat(finalValueOverride) 
+        : calculatedTotal;
+      
       const res = await fetch('/api/sales', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           clientId,
-          itemName: useMultipleItems && saleItems.length > 0 ? saleItems.map(i => i.itemName).join(', ') : itemName,
+          itemName: useMultipleItems && saleItems.length > 0 
+            ? (isExchange ? '🔄 TROCA: ' : '') + saleItems.map(i => i.itemName).join(', ') 
+            : itemName,
           itemCode: itemCode || null,
           factor: factor ? parseFloat(factor) : null,
           itemType: itemType || null,
           baseValue: baseValue ? parseFloat(baseValue) : null,
-          totalValue: parseFloat(totalValue),
+          totalValue: valorFinal,
           paymentMethod: 'Parcelado',
           installments,
           roundUpInstallments: roundUpInstallments && installments > 1,
@@ -2237,7 +2548,8 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
           sellerName: sellerName || null,
           items: useMultipleItems ? saleItems : null,
           discount: useMultipleItems && discountValue ? parseFloat(discountValue) : 0,
-          firstPaymentDate: installments > 1 ? firstPaymentDate : null
+          firstPaymentDate: installments > 1 ? firstPaymentDate : null,
+          isExchange: isExchange
         })
       });
       
@@ -2291,14 +2603,16 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
         setClientBillingAddress('');
         setSellerName('');
         setSaleItems([]);
-        setUseMultipleItems(false);
         setDiscountValue('');
+        setIsExchange(false);
+        setFinalValueOverride('');
         setCurrentItem({
           itemName: '',
           itemCode: '',
           factor: '',
           baseValue: '',
           quantity: '1',
+          installmentsPerItem: '1',
           unitPrice: ''
         });
         // Resetar data do primeiro pagamento para próximo mês
@@ -2513,35 +2827,14 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
         <p className="text-xs text-pink-600 mt-1">Este nome aparecerá em todos os relatórios e na relação de cobrança</p>
       </div>
 
-      {/* Toggle para múltiplos itens */}
-      <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-300 rounded-xl">
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={useMultipleItems}
-            onChange={(e) => {
-              setUseMultipleItems(e.target.checked);
-              if (!e.target.checked) {
-                setSaleItems([]);
-                setDiscountValue('');
-              }
-            }}
-            className="w-6 h-6 accent-purple-600"
-          />
-          <span className="text-lg font-bold text-purple-800">📋 Adicionar Múltiplos Produtos na Venda</span>
-        </label>
-        <p className="text-xs text-purple-600 mt-2 ml-9">Ative para adicionar vários produtos em uma única compra</p>
-      </div>
-
-      {useMultipleItems ? (
-        /* Seção de Carrinho de Compras - Estilo Mercado Livre */
-        <div className="mb-6 space-y-6">
-          {/* Formulário para adicionar item */}
-          <div className="p-6 bg-gradient-to-br from-white to-purple-50 border-2 border-purple-300 rounded-xl shadow-md">
-            <h3 className="font-bold text-purple-800 mb-4 text-lg flex items-center gap-2">
-              <span className="text-2xl">🛒</span> Adicionar Produto ao Carrinho
-            </h3>
-            
+      {/* Seção de Carrinho de Compras */}
+      <div className="mb-6 space-y-6">
+        {/* Formulário para adicionar item */}
+        <div className="p-6 bg-gradient-to-br from-white to-purple-50 border-2 border-purple-300 rounded-xl shadow-md">
+          <h3 className="font-bold text-purple-800 mb-4 text-lg flex items-center gap-2">
+            <span className="text-2xl">🛒</span> Adicionar Produto ao Carrinho
+          </h3>
+          
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <label className="block text-sm font-semibold mb-1 text-gray-700">Nome do Produto *</label>
@@ -2565,8 +2858,6 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
                 />
               </div>
               
-              <div>
-
               <div>
                 <label className="block text-sm font-semibold mb-1 text-gray-700">Fator</label>
                 <input 
@@ -2741,6 +3032,22 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
                     </span>
                   </div>
 
+                  {/* Marcador de Troca */}
+                  <label className="flex items-center gap-3 cursor-pointer p-3 bg-orange-50 rounded-lg border-2 border-orange-300 hover:border-orange-400 transition">
+                    <input 
+                      type="checkbox" 
+                      checked={isExchange} 
+                      onChange={(e) => setIsExchange(e.target.checked)} 
+                      className="w-6 h-6 accent-orange-600" 
+                    />
+                    <div>
+                      <span className="font-semibold text-orange-800">🔄 Esta é uma TROCA</span>
+                      <p className="text-xs text-orange-600 mt-1">
+                        Marque se o cliente está trocando por outra peça
+                      </p>
+                    </div>
+                  </label>
+
                   {/* Campo de desconto */}
                   <div className="bg-yellow-50 p-4 rounded-lg border-2 border-yellow-300">
                     <label className="block text-sm font-bold mb-2 text-yellow-800">💰 Desconto (R$)</label>
@@ -2763,11 +3070,40 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
                     </div>
                   )}
 
-                  <div className="flex justify-between items-center p-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg shadow-lg">
-                    <span className="text-xl font-bold">TOTAL GERAL:</span>
-                    <span className="text-3xl font-bold">
-                      R$ {(saleItems.reduce((sum, item) => sum + item.totalValue, 0) - (parseFloat(discountValue) || 0)).toFixed(2)}
-                    </span>
+                  {/* Valor Final Calculado + Campo Editável */}
+                  <div className="p-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg shadow-lg">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-lg font-bold">Valor Calculado:</span>
+                      <span className="text-2xl font-bold">
+                        R$ {(saleItems.reduce((sum, item) => sum + item.totalValue, 0) - (parseFloat(discountValue) || 0)).toFixed(2)}
+                      </span>
+                    </div>
+                    
+                    <div className="bg-white/20 p-3 rounded-lg">
+                      <label className="block text-sm font-semibold mb-2 text-white/90">✏️ Valor Final (editável - para arredondamento)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder={`${(saleItems.reduce((sum, item) => sum + item.totalValue, 0) - (parseFloat(discountValue) || 0)).toFixed(2)}`}
+                        value={finalValueOverride}
+                        onChange={(e) => setFinalValueOverride(e.target.value)}
+                        className="w-full p-3 border-2 border-green-300 rounded-lg text-xl font-bold text-green-700 focus:border-green-500 focus:outline-none"
+                      />
+                      <p className="text-xs text-white/80 mt-2">
+                        💡 Use para arredondar o valor conforme solicitado pelo vendedor
+                      </p>
+                    </div>
+                    
+                    {finalValueOverride && parseFloat(finalValueOverride) > 0 && (
+                      <div className="mt-3 pt-3 border-t border-white/30">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xl font-bold">VALOR FINAL:</span>
+                          <span className="text-3xl font-bold">
+                            R$ {parseFloat(finalValueOverride).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <p className="text-sm text-gray-600 text-center mt-3">
@@ -2876,433 +3212,256 @@ function NovaVendaPage({ token, onSuccess, clients }: { token: string, onSuccess
                     </div>
                   </label>
                 )}
-              </div>
-            </div>
-          )}
-        </div>
-      ) : (
-        /* Formulário de Item Único (modo antigo) */
-        <>
 
-      <div className="mb-4">
-        <label className="block font-semibold mb-2">💎 Joia</label>
-        <div className="relative">
-          <input 
-            type="text" 
-            className="w-full p-3 border rounded-lg" 
-            placeholder="🔍 Digite o nome da peça ou selecione do mostruário..." 
-            value={itemSearch} 
-            onChange={(e) => {
-              setItemSearch(e.target.value);
-              setShowItemSuggestions(true);
-            }}
-            onFocus={() => setShowItemSuggestions(true)}
-            autoComplete="off"
-          />
-          {showItemSuggestions && itemSearch && showcaseItems.filter((item) => 
-            item.itemName.toLowerCase().includes(itemSearch.toLowerCase())
-          ).length > 0 && (
-            <div className="absolute z-10 w-full mt-1 border-2 border-purple-300 rounded-lg bg-white shadow-xl max-h-72 overflow-y-auto">
-              <div className="sticky top-0 bg-purple-50 px-3 py-2 border-b border-purple-200">
-                <p className="text-xs font-semibold text-purple-700">
-                  {showcaseItems.filter((item) => item.itemName.toLowerCase().includes(itemSearch.toLowerCase())).length} produto(s) encontrado(s)
-                </p>
-              </div>
-              {showcaseItems
-                .filter((item) => item.itemName.toLowerCase().includes(itemSearch.toLowerCase()))
-                .slice(0, 8)
-                .map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => handleSelectShowcaseItem(item)}
-                    className="w-full text-left p-3 hover:bg-purple-50 border-b last:border-b-0 transition flex gap-3 items-start"
-                  >
-                    {item.imageUrl && (
-                      <img 
-                        src={item.imageUrl} 
-                        alt={item.itemName}
-                        className="w-16 h-16 rounded object-cover flex-shrink-0"
-                      />
-                    )}
-                    <div className="flex-1">
-                      <p className="font-semibold text-gray-800">{item.itemName}</p>
-                      {item.itemCode && <p className="text-xs text-gray-600">📦 {item.itemCode}</p>}
-                      <p className="text-sm font-bold text-green-600 mt-1">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price || 0)}
+                {/* Preview das Parcelas */}
+                {installments > 1 && saleItems.length > 0 && (() => {
+                  const valorBase = finalValueOverride && parseFloat(finalValueOverride) > 0 
+                    ? parseFloat(finalValueOverride) 
+                    : saleItems.reduce((sum, item) => sum + item.totalValue, 0) - (parseFloat(discountValue) || 0);
+                  
+                  // Se tem valores customizados, usar eles, senão calcular
+                  const temValoresCustom = customInstallmentValues.length === installments;
+                  const valorFinal = temValoresCustom 
+                    ? customInstallmentValues.reduce((a, b) => a + b, 0)
+                    : valorBase;
+                  
+                  const parcelaExata = valorBase / installments;
+                  const parcelaArredondada = Math.ceil(parcelaExata);
+                  const ultimaParcela = valorBase - (parcelaArredondada * (installments - 1));
+                  
+                  const [year, month] = firstPaymentDate.split('-').map(Number);
+                  const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                  
+                  // Gerar valores das parcelas
+                  const getValorParcela = (index: number) => {
+                    if (temValoresCustom) return customInstallmentValues[index];
+                    if (roundUpInstallments) {
+                      return index === installments - 1 ? ultimaParcela : parcelaArredondada;
+                    }
+                    return parcelaExata;
+                  };
+                  
+                  // Função para editar uma parcela e redistribuir
+                  const handleEditParcela = (index: number, novoValor: number) => {
+                    const valores = temValoresCustom 
+                      ? [...customInstallmentValues]
+                      : Array.from({ length: installments }, (_, i) => getValorParcela(i));
+                    
+                    valores[index] = novoValor;
+                    setCustomInstallmentValues(valores);
+                    
+                    // Atualizar o valor final override com a soma
+                    const novoTotal = valores.reduce((a, b) => a + b, 0);
+                    setFinalValueOverride(novoTotal.toFixed(2));
+                  };
+                  
+                  // Função para redistribuir mantendo o total
+                  const handleRedistribuir = (index: number, novoValor: number) => {
+                    const valores = temValoresCustom 
+                      ? [...customInstallmentValues]
+                      : Array.from({ length: installments }, (_, i) => getValorParcela(i));
+                    
+                    const totalAtual = valores.reduce((a, b) => a + b, 0);
+                    const diferenca = novoValor - valores[index];
+                    
+                    // Calcula quanto redistribuir nas outras parcelas
+                    const outrasParcelas = installments - 1;
+                    if (outrasParcelas > 0) {
+                      const ajustePorParcela = diferenca / outrasParcelas;
+                      
+                      for (let i = 0; i < installments; i++) {
+                        if (i === index) {
+                          valores[i] = novoValor;
+                        } else {
+                          valores[i] = Math.max(0, valores[i] - ajustePorParcela);
+                        }
+                      }
+                    } else {
+                      valores[index] = novoValor;
+                    }
+                    
+                    setCustomInstallmentValues(valores);
+                  };
+                  
+                  return (
+                    <div className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-300 rounded-xl">
+                      <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                        📋 Preview das Parcelas
+                        <span className="text-sm font-normal text-gray-500">({installments}×)</span>
+                        {temValoresCustom && (
+                          <button
+                            onClick={() => setCustomInstallmentValues([])}
+                            className="ml-auto text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded transition"
+                            title="Resetar valores personalizados"
+                          >
+                            🔄 Resetar
+                          </button>
+                        )}
+                      </h4>
+                      
+                      {/* Resumo */}
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div className={`p-3 rounded-lg border-2 ${!roundUpInstallments && !temValoresCustom ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
+                          <p className="text-xs text-gray-500 uppercase">Valor Exato</p>
+                          <p className="font-bold text-lg text-gray-800">{installments}× R$ {parcelaExata.toFixed(2)}</p>
+                        </div>
+                        <div className={`p-3 rounded-lg border-2 ${roundUpInstallments && !temValoresCustom ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
+                          <p className="text-xs text-gray-500 uppercase">Arredondado</p>
+                          <p className="font-bold text-lg text-gray-800">{installments - 1}× R$ {parcelaArredondada.toFixed(2)}</p>
+                          <p className="text-xs text-green-600">+ 1× R$ {ultimaParcela.toFixed(2)}</p>
+                        </div>
+                      </div>
+                      
+                      {temValoresCustom && (
+                        <div className="mb-3 p-2 bg-yellow-50 border border-yellow-300 rounded-lg text-xs text-yellow-800 flex items-center gap-2">
+                          <span>✏️</span>
+                          <span>Valores personalizados ativos - clique em "Resetar" para voltar ao cálculo automático</span>
+                        </div>
+                      )}
+                      
+                      {/* Tabela de Parcelas Editável */}
+                      <div className="bg-white rounded-lg border overflow-hidden">
+                        <div className="bg-gray-100 px-3 py-2 border-b flex justify-between items-center">
+                          <p className="text-sm font-semibold text-gray-700">📅 Cronograma de Pagamentos</p>
+                          <p className="text-xs text-gray-500">Clique no valor para editar</p>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-50 sticky top-0">
+                              <tr>
+                                <th className="text-left p-2 border-b">Parcela</th>
+                                <th className="text-left p-2 border-b">Vencimento</th>
+                                <th className="text-right p-2 border-b">Valor (editável)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {Array.from({ length: installments }, (_, i) => {
+                                const vencimento = new Date(year, month - 1 + i, 1);
+                                const valor = getValorParcela(i);
+                                const isCustom = temValoresCustom && customInstallmentValues[i] !== (roundUpInstallments ? (i === installments - 1 ? ultimaParcela : parcelaArredondada) : parcelaExata);
+                                
+                                return (
+                                  <tr key={i} className={isCustom ? 'bg-yellow-50' : (i === installments - 1 && roundUpInstallments && !temValoresCustom ? 'bg-green-50' : '')}>
+                                    <td className="p-2 border-b">
+                                      <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-semibold">
+                                        {i + 1}/{installments}
+                                      </span>
+                                    </td>
+                                    <td className="p-2 border-b text-gray-600">
+                                      {meses[vencimento.getMonth()]}/{vencimento.getFullYear()}
+                                    </td>
+                                    <td className="p-2 border-b text-right">
+                                      <div className="flex items-center justify-end gap-1">
+                                        <span className="text-gray-500">R$</span>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          min="0"
+                                          className={`w-24 p-1 border-2 rounded text-right font-mono font-semibold transition ${isCustom ? 'border-yellow-400 bg-yellow-50' : 'border-gray-300'} hover:border-blue-400 focus:border-blue-500 focus:outline-none`}
+                                          value={valor.toFixed(2)}
+                                          onChange={(e) => handleEditParcela(i, parseFloat(e.target.value) || 0)}
+                                          title={`Editar valor da parcela ${i + 1} - altera o total final`}
+                                        />
+                                        {isCustom && <span className="text-yellow-600" title="Valor personalizado">✏️</span>}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot className="bg-gradient-to-r from-green-100 to-emerald-100">
+                              <tr>
+                                <td className="p-3 font-bold text-gray-700" colSpan={2}>
+                                  <div className="flex items-center gap-2">
+                                    <span>💰 TOTAL FINAL</span>
+                                    {temValoresCustom && Math.abs(valorFinal - valorBase) > 0.01 && (
+                                      <span className={`text-xs px-2 py-1 rounded ${valorFinal > valorBase ? 'bg-green-200 text-green-700' : 'bg-red-200 text-red-700'}`}>
+                                        {valorFinal > valorBase ? '+' : ''}{(valorFinal - valorBase).toFixed(2)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="p-3 text-right">
+                                  <span className="text-2xl font-bold text-green-600">
+                                    R$ {valorFinal.toFixed(2)}
+                                  </span>
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                      
+                      {/* Dica de uso */}
+                      <p className="text-xs text-gray-500 mt-3 text-center">
+                        💡 Edite cada parcela individualmente. O valor total será recalculado automaticamente.
                       </p>
                     </div>
-                  </button>
-                ))}
+                  );
+                })()}
+              </div>
             </div>
           )}
-        </div>
       </div>
-
-      <div className="mb-4">
-        <input type="text" className="w-full p-3 border rounded-lg" placeholder="Nome da peça" value={itemName} onChange={(e) => setItemName(e.target.value)} />
-      </div>
-
-      {/* Calculadora de Valor */}
-      <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-200 rounded-xl">
-        <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-          🧮 Calculadora de Valor
-        </h3>
-        
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div>
-            <label className="block text-sm font-semibold mb-1 text-gray-700">Código da Peça</label>
-            <input 
-              type="text" 
-              className="w-full p-2 border rounded-lg" 
-              placeholder="Ex: P-1234, ABC..." 
-              value={itemCode} 
-              onChange={(e) => setItemCode(e.target.value)} 
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-semibold mb-1 text-gray-700">Fator (Fixo)</label>
-            <input 
-              type="number" 
-              step="0.1"
-              className="w-full p-2 border rounded-lg" 
-              placeholder="Ex: 3.5" 
-              value={factor} 
-              onChange={(e) => setFactor(e.target.value)} 
-            />
-          </div>
-        </div>
-
-        <div className="mb-3">
-          <label className="block text-sm font-semibold mb-1 text-gray-700">Valor base do dia (R$)</label>
-          <input 
-            type="number" 
-            step="0.01"
-            className="w-full p-2 border rounded-lg" 
-            placeholder="0.00" 
-            value={baseValue} 
-            onChange={(e) => setBaseValue(e.target.value)} 
-          />
-        </div>
-
-        {factor && baseValue && (
-          <div className="bg-white p-3 rounded-lg border-2 border-green-400">
-            <p className="text-sm text-gray-600 mb-1">
-              <strong>Cálculo:</strong> {factor} × R$ {parseFloat(baseValue).toFixed(2)} = 
-            </p>
-            <p className="text-2xl font-bold text-green-600">
-              R$ {totalValue}
-            </p>
-          </div>
-        )}
-      </div>
-
-      <div className="mb-4">
-        <label className="block font-semibold mb-2">💰 Valor Total (R$)</label>
-        <div className="flex gap-2">
-          <input 
-            type="number" 
-            className="flex-1 p-3 border rounded-lg bg-gray-50" 
-            placeholder="0.00" 
-            value={totalValue} 
-            onChange={(e) => setTotalValue(e.target.value)}
-            title="Calculado automaticamente ou digite manualmente"
-          />
-          {installments === 1 && totalValue && parseFloat(totalValue) > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                const currentValue = parseFloat(totalValue);
-                const roundedValue = Math.ceil(currentValue);
-                setTotalValue(roundedValue.toString());
-              }}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition whitespace-nowrap"
-              title="Arredondar para cima"
-            >
-              ⬆️ Arredondar
-            </button>
+      
+      {/* ========================================= */}
+      {/* SEÇÃO FINAL: Opções de Envio e Registro  */}
+      {/* ========================================= */}
+      {saleItems.length > 0 && (
+        <div className="space-y-4">
+          {/* Enviar Carnê pelo WhatsApp */}
+          {installments > 1 && (
+            <div className="p-4 bg-green-50 border-2 border-green-300 rounded-xl">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={sendCard} 
+                  onChange={(e) => setSendCard(e.target.checked)}
+                  className="w-6 h-6 accent-green-600"
+                />
+                <div>
+                  <span className="font-semibold text-green-800 text-lg">📱 Enviar carnê de parcelas pelo WhatsApp</span>
+                  <p className="text-sm text-green-600 mt-1">
+                    O carnê será enviado para o cliente automaticamente após registrar
+                  </p>
+                </div>
+              </label>
+            </div>
           )}
-        </div>
-        <p className="text-xs text-gray-500 mt-1">Calculado automaticamente ou edite manualmente</p>
-        <label className="flex items-center gap-2 mt-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={roundUpTotal}
-            onChange={(e) => setRoundUpTotal(e.target.checked)}
-            className="w-5 h-5 accent-blue-500"
-          />
-          <span className="text-sm font-semibold text-blue-700">⬆️ Arredondar valor total para cima automaticamente</span>
-        </label>
-      </div>
 
-      <div className="mb-4">
-        <label className="block font-semibold mb-2">📊 Parcelas</label>
-        <input type="number" className="w-full p-3 border rounded-lg" min="1" value={installments} onChange={(e) => { setInstallments(parseInt(e.target.value)); if (parseInt(e.target.value) > 1) setDiscountValue(''); }} title="Número de parcelas" placeholder="Número de parcelas" />
-      </div>
-
-      {/* Campo de Data do Primeiro Pagamento */}
-      {installments > 1 && (
-        <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl">
-          <label className="block font-bold text-blue-800 mb-2">📅 Mês do Primeiro Pagamento</label>
-          <input 
-            type="month" 
-            className="w-full p-3 border-2 border-blue-400 rounded-lg text-lg font-semibold focus:border-blue-600 focus:outline-none" 
-            value={firstPaymentDate} 
-            onChange={(e) => setFirstPaymentDate(e.target.value)}
-            min={new Date().toISOString().split('T')[0].substring(0, 7)}
-          />
-          <p className="text-sm text-blue-700 mt-2">
-            ✨ Benefício: Cliente pode começar a pagar em {new Date(firstPaymentDate + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-          </p>
-        </div>
-      )}
-
-      {/* Campo de Desconto à Vista */}
-      {installments === 1 && totalValue && parseFloat(totalValue) > 0 && (
-        <div className="mb-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl">
-          <h4 className="font-bold text-green-800 mb-3 flex items-center gap-2">
-            💵 Pagamento à Vista
-          </h4>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-semibold mb-1 text-green-700">Desconto (R$)</label>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={discountValue}
-                onChange={(e) => setDiscountValue(e.target.value)}
-                className="w-full p-2 border-2 border-green-400 rounded-lg text-lg font-bold text-green-600"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold mb-1 text-green-700">Valor Final</label>
-              <div className="w-full p-2 bg-white border-2 border-green-500 rounded-lg text-lg font-bold text-green-600">
-                R$ {(parseFloat(totalValue) - (parseFloat(discountValue) || 0)).toFixed(2)}
-              </div>
-            </div>
-          </div>
-          {discountValue && parseFloat(discountValue) > 0 && (
-            <p className="text-xs text-green-600 mt-2">✅ Desconto de R$ {parseFloat(discountValue).toFixed(2)} aplicado para pagamento à vista</p>
-          )}
-        </div>
-      )}
-
-      {/* Preview das Parcelas com Opção de Arredondamento */}
-      {installments > 1 && totalValue && parseFloat(totalValue) > 0 && (() => {
-        const total = parseFloat(totalValue);
-        const parcelaExata = total / installments;
-        const parcelaArredondada = Math.ceil(parcelaExata);
-        const somaArredondada = parcelaArredondada * (installments - 1);
-        const ultimaParcelaArredondada = total - somaArredondada;
-        
-        // Gerar lista de parcelas para preview
-        const parcelasPreview = [];
-        const [year, month] = firstPaymentDate.split('-').map(Number);
-        const baseDate = new Date(year, month - 1, 1); // Mês no JS é 0-indexed
-        
-        for (let i = 0; i < installments; i++) {
-          const vencimento = new Date(baseDate);
-          vencimento.setMonth(vencimento.getMonth() + i);
-          
-          let valor;
-          if (roundUpInstallments) {
-            valor = i === installments - 1 ? ultimaParcelaArredondada : parcelaArredondada;
-          } else {
-            valor = parcelaExata;
-          }
-          
-          parcelasPreview.push({
-            numero: i + 1,
-            valor,
-            vencimento
-          });
-        }
-        
-        const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-        
-        return (
-          <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl">
-            <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-              📋 Preview das Parcelas
-              <span className="text-sm font-normal text-gray-500">({installments} parcelas)</span>
-            </h4>
-            
-            {/* Opção de Arredondamento */}
-            <label className="flex items-center gap-3 cursor-pointer mb-4 p-3 bg-white rounded-lg border-2 border-blue-200 hover:border-blue-400 transition">
-              <input 
-                type="checkbox" 
-                checked={roundUpInstallments} 
-                onChange={(e) => setRoundUpInstallments(e.target.checked)}
-                className="w-6 h-6 accent-blue-500"
-              />
-              <div className="flex-1">
-                <span className="font-semibold text-blue-700">⬆️ Arredondar parcelas para cima</span>
-                <p className="text-xs text-blue-600">Parcelas de R$ {parcelaArredondada.toFixed(2)} e última de R$ {ultimaParcelaArredondada.toFixed(2)}</p>
-              </div>
-            </label>
-            
-            {/* Resumo */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className={`p-3 rounded-lg border-2 ${!roundUpInstallments ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
-                <p className="text-xs text-gray-500 uppercase">Valor Exato</p>
-                <p className="font-bold text-lg text-gray-800">{installments}x R$ {parcelaExata.toFixed(2)}</p>
-              </div>
-              <div className={`p-3 rounded-lg border-2 ${roundUpInstallments ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
-                <p className="text-xs text-gray-500 uppercase">Arredondado</p>
-                <p className="font-bold text-lg text-gray-800">{installments - 1}x R$ {parcelaArredondada.toFixed(2)}</p>
-                <p className="text-xs text-green-600">+ 1x R$ {ultimaParcelaArredondada.toFixed(2)}</p>
-              </div>
-            </div>
-            
-            {/* Tabela de Parcelas */}
-            <div className="bg-white rounded-lg border overflow-hidden">
-              <div className="bg-gray-100 px-3 py-2 border-b">
-                <p className="text-sm font-semibold text-gray-700">📅 Cronograma de Pagamentos</p>
-              </div>
-              <div className="max-h-48 overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 sticky top-0">
-                    <tr>
-                      <th className="text-left p-2 border-b">Parcela</th>
-                      <th className="text-left p-2 border-b">Vencimento</th>
-                      <th className="text-right p-2 border-b">Valor (editável)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {parcelasPreview.map((p, idx) => (
-                      <tr key={idx} className={customInstallmentValues[idx] !== p.valor ? 'bg-yellow-50' : (idx === installments - 1 && roundUpInstallments ? 'bg-green-50' : '')}>
-                        <td className="p-2 border-b">
-                          <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-semibold">
-                            {p.numero}/{installments}
-                          </span>
-                        </td>
-                        <td className="p-2 border-b text-gray-600">
-                          {meses[p.vencimento.getMonth()]}/{p.vencimento.getFullYear()}
-                        </td>
-                        <td className="p-2 border-b text-right">
-                          <input
-                            type="number"
-                            step="0.01"
-                            className="w-24 p-1 border rounded text-right font-mono font-semibold"
-                            value={customInstallmentValues[idx]?.toFixed(2) || p.valor.toFixed(2)}
-                            onChange={(e) => {
-                              const newValue = parseFloat(e.target.value) || 0;
-                              const newValues = [...customInstallmentValues];
-                              newValues[idx] = newValue;
-                              
-                              // Recalcular total e redistribuir outras parcelas
-                              const totalEditado = newValues.reduce((a, b) => a + b, 0);
-                              
-                              // Redistribuir o valor nas outras parcelas (exceto a atual)
-                              const outrasParcelas = installments - 1;
-                              if (outrasParcelas > 0) {
-                                const valorRestante = totalEditado - newValue;
-                                const valorPorParcela = Math.ceil(valorRestante / outrasParcelas);
-                                
-                                for (let i = 0; i < installments; i++) {
-                                  if (i !== idx) {
-                                    if (i === installments - 1 && idx !== installments - 1) {
-                                      // Última parcela recebe o resto
-                                      const somaAteAgora = newValue + (valorPorParcela * (outrasParcelas - 1));
-                                      newValues[i] = totalEditado - somaAteAgora;
-                                    } else if (i < installments - 1 || idx === installments - 1) {
-                                      newValues[i] = valorPorParcela;
-                                    }
-                                  }
-                                }
-                              }
-                              
-                              // Atualizar total value
-                              const novoTotal = newValues.reduce((a, b) => a + b, 0);
-                              setTotalValue(novoTotal.toFixed(2));
-                              setCustomInstallmentValues(newValues);
-                            }}
-                            title={`Editar valor da parcela ${idx + 1}`}
-                          />
-                          {customInstallmentValues[idx] !== p.valor && (
-                            <span className="ml-1 text-xs text-yellow-600" title="Valor personalizado">✏️</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-gray-50">
-                    <tr>
-                      <td colSpan={2} className="p-2 font-semibold text-gray-700">Total</td>
-                      <td className="p-2 text-right">
-                        <input
-                          type="number"
-                          step="0.01"
-                          className="w-32 p-1 border-2 border-green-500 rounded text-right font-mono font-bold text-green-600"
-                          value={customInstallmentValues.length > 0 ? customInstallmentValues.reduce((a, b) => a + b, 0).toFixed(2) : total.toFixed(2)}
-                          onChange={(e) => {
-                            const novoTotal = parseFloat(e.target.value) || 0;
-                            
-                            // Redistribuir o total nas parcelas
-                            const valorPorParcela = Math.ceil(novoTotal / installments);
-                            const newValues = [];
-                            
-                            for (let i = 0; i < installments; i++) {
-                              if (i === installments - 1) {
-                                // Última parcela recebe o resto
-                                const somaAteAgora = valorPorParcela * (installments - 1);
-                                newValues[i] = novoTotal - somaAteAgora;
-                              } else {
-                                newValues[i] = valorPorParcela;
-                              }
-                            }
-                            
-                            setCustomInstallmentValues(newValues);
-                            setTotalValue(novoTotal.toFixed(2));
-                          }}
-                          title="Editar valor total - ele redistribuirá automaticamente nas parcelas"
-                        />
-                        {customInstallmentValues.length > 0 && Math.abs(customInstallmentValues.reduce((a, b) => a + b, 0) - total) > 0.01 && (
-                          <span className="ml-2 text-xs text-orange-600">
-                            (Diferença: R$ {(customInstallmentValues.reduce((a, b) => a + b, 0) - total).toFixed(2)})
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-      </>
-      )}
-
-      {/* Fim do toggle de múltiplos itens / item único */}
-
-      {installments > 1 && (
-        <div className="mb-4">
-          <label className="flex items-center gap-2 cursor-pointer">
+          {/* Foto da Peça */}
+          <div className="p-4 bg-gray-50 border-2 border-gray-300 rounded-xl">
+            <label className="block font-bold text-gray-800 mb-3">📸 Foto da Peça (opcional)</label>
             <input 
-              type="checkbox" 
-              checked={sendCard} 
-              onChange={(e) => setSendCard(e.target.checked)}
-              className="w-5 h-5"
+              type="file" 
+              accept="image/*" 
+              className="w-full p-3 border-2 border-gray-300 rounded-lg bg-white" 
+              onChange={handlePhotoCapture} 
+              title="Selecione uma foto da peça" 
             />
-            <span className="font-semibold">📧 Enviar cartão de parcelas pelo WhatsApp</span>
-          </label>
-          <p className="text-sm text-gray-600 ml-7 mt-1">
-            O cartão será enviado para o cliente e uma cópia para você
-          </p>
+            {photo && (
+              <div className="mt-3 flex items-center gap-3">
+                <img src={photo} className="max-w-xs rounded-lg border-2 border-gray-300" alt="Preview" />
+                <button 
+                  onClick={() => setPhoto('')}
+                  className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600"
+                >
+                  🗑️ Remover
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Botão de Registrar Venda */}
+          <button 
+            onClick={handleSubmit} 
+            className="w-full bg-gradient-to-r from-purple-600 to-blue-500 text-white p-5 rounded-xl font-bold text-xl hover:shadow-2xl hover:scale-[1.02] transition-all flex items-center justify-center gap-3"
+          >
+            <span className="text-2xl">💾</span>
+            Registrar Venda
+          </button>
         </div>
       )}
-
-      <div className="mb-4">
-        <label className="block font-semibold mb-2">📸 Foto da Peça</label>
-        <input type="file" accept="image/*" className="w-full p-3 border rounded-lg" onChange={handlePhotoCapture} title="Selecione uma foto da peça" />
-        {photo && <img src={photo} className="mt-3 max-w-xs rounded-lg border" alt="Preview" />}
-      </div>
-
-      <button onClick={handleSubmit} className="w-full bg-gradient-to-r from-purple-600 to-blue-500 text-white p-4 rounded-lg font-bold text-lg hover:shadow-xl transition">
-        💾 Registrar Venda
-      </button>
     </div>
   );
 }
@@ -4194,6 +4353,7 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
   const [newPaymentDate, setNewPaymentDate] = useState('');
   const [sortOrder, setSortOrder] = useState<'recent' | 'oldest'>('recent');
   const [clientSortOrder, setClientSortOrder] = useState<'recent' | 'oldest'>('recent');
+  const [editingSale, setEditingSale] = useState<any>(null);
 
   const filteredClients = useMemo(() => {
     let filtered = clientSearch.trim() ? clients.filter(c => {
@@ -4488,10 +4648,17 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
                 const progresso = (totalPago / sale.totalValue) * 100;
 
                 return (
-                  <div key={sale.id} className="border-2 border-gray-200 rounded-lg p-4 hover:border-purple-300 transition">
+                  <div key={sale.id} className={`border-2 rounded-lg p-4 hover:border-purple-300 transition ${sale.isExchange ? 'border-orange-400 bg-orange-50' : 'border-gray-200'}`}>
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
-                        <h3 className="text-lg font-bold text-gray-800">{sale.itemName}</h3>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-lg font-bold text-gray-800">{sale.itemName}</h3>
+                          {sale.isExchange && (
+                            <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                              🔄 TROCA
+                            </span>
+                          )}
+                        </div>
                         <p className="text-sm text-gray-500">{formatDate(sale.saleDate)}</p>
                         {sale.installments > 1 && sale.installmentsR && sale.installmentsR.length > 0 && (
                           <p className="text-xs text-blue-600 mt-1">
@@ -5254,12 +5421,21 @@ function RelatorioPage({ token, clients }: { token: string, clients: any[] }) {
                 </thead>
                 <tbody>
                   {analytics.allSales.map((sale: any) => (
-                    <tr key={sale.id} className="border-b hover:bg-gray-50">
+                    <tr key={sale.id} className={`border-b hover:bg-gray-50 ${sale.isExchange ? 'bg-orange-50' : ''}`}>
                       <td className="px-4 py-3 text-gray-600 text-sm">
                         {new Date(sale.saleDate).toLocaleDateString('pt-BR')}
                       </td>
                       <td className="px-4 py-3 text-gray-800 font-medium">{sale.client.name}</td>
-                      <td className="px-4 py-3 text-gray-700">{sale.itemName}</td>
+                      <td className="px-4 py-3 text-gray-700">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span>{sale.itemName}</span>
+                          {sale.isExchange && (
+                            <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
+                              🔄 TROCA
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-center text-gray-600">{sale.installments}x</td>
                       <td className="px-4 py-3 text-right font-bold text-green-600">{formatCurrency(sale.totalValue)}</td>
                     </tr>

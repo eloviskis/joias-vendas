@@ -332,7 +332,7 @@ app.put('/sales/:id/update-payment-date', async (req: any, reply) => {
     // Buscar venda com parcelas
     const sale = await prisma.sale.findUnique({
       where: { id },
-      include: { installments: { orderBy: { sequence: 'asc' } } }
+      include: { installmentsR: { orderBy: { sequence: 'asc' } } }
     });
     
     if (!sale) {
@@ -344,8 +344,8 @@ app.put('/sales/:id/update-payment-date', async (req: any, reply) => {
     const baseDate = new Date(year, month - 1, 1);
     
     // Atualizar cada parcela
-    for (let i = 0; i < sale.installments.length; i++) {
-      const installment = sale.installments[i];
+    for (let i = 0; i < sale.installmentsR.length; i++) {
+      const installment = sale.installmentsR[i];
       const newDueDate = new Date(baseDate);
       newDueDate.setMonth(newDueDate.getMonth() + i);
       
@@ -361,8 +361,206 @@ app.put('/sales/:id/update-payment-date', async (req: any, reply) => {
   }
 });
 
+// Editar venda existente
+app.put('/sales/:id', async (req: any, reply) => {
+  const id = Number(req.params.id);
+  const { 
+    itemName, 
+    itemCode, 
+    factor, 
+    itemType, 
+    baseValue, 
+    totalValue, 
+    paymentMethod, 
+    installments, 
+    roundUpInstallments,
+    customInstallmentValues,
+    saleDate, 
+    observations, 
+    sellerName, 
+    commission, 
+    imageBase64,
+    items,
+    discount,
+    firstPaymentDate,
+    recalculateInstallments
+  } = req.body;
+  
+  try {
+    // Verificar se a venda existe
+    const existingSale = await prisma.sale.findUnique({
+      where: { id },
+      include: { installmentsR: true, items: true }
+    });
+    
+    if (!existingSale) {
+      return reply.code(404).send({ error: 'Venda não encontrada' });
+    }
+    
+    // Calcular total se houver itens
+    let calculatedTotal = totalValue;
+    if (items && items.length > 0) {
+      calculatedTotal = items.reduce((sum: number, item: any) => sum + item.totalValue, 0);
+      if (discount) {
+        calculatedTotal -= discount;
+      }
+    }
+    
+    // Atualizar a venda
+    const updatedSale = await prisma.sale.update({
+      where: { id },
+      data: { 
+        itemName: itemName ?? existingSale.itemName,
+        itemCode: itemCode !== undefined ? itemCode : existingSale.itemCode,
+        factor: factor !== undefined ? factor : existingSale.factor,
+        itemType: itemType !== undefined ? itemType : existingSale.itemType,
+        baseValue: baseValue !== undefined ? baseValue : existingSale.baseValue,
+        totalValue: calculatedTotal ?? existingSale.totalValue,
+        paymentMethod: paymentMethod ?? existingSale.paymentMethod,
+        installments: installments ?? existingSale.installments,
+        saleDate: saleDate ? new Date(saleDate) : existingSale.saleDate,
+        observations: observations !== undefined ? observations : existingSale.observations,
+        sellerName: sellerName !== undefined ? sellerName : existingSale.sellerName,
+        commission: commission !== undefined ? commission : existingSale.commission,
+        discount: discount !== undefined ? discount : existingSale.discount
+      }
+    });
+    
+    // Atualizar itens da venda se fornecidos
+    if (items && items.length > 0) {
+      // Remover itens antigos
+      await prisma.saleItem.deleteMany({ where: { saleId: id } });
+      
+      // Criar novos itens
+      await prisma.saleItem.createMany({
+        data: items.map((item: any) => ({
+          saleId: id,
+          itemName: item.itemName,
+          itemCode: item.itemCode || null,
+          factor: item.factor || null,
+          baseValue: item.baseValue || null,
+          quantity: item.quantity || 1,
+          unitPrice: item.unitPrice,
+          totalValue: item.totalValue
+        }))
+      });
+    }
+    
+    // Atualizar imagem se fornecida
+    if (imageBase64) {
+      const dir = path.join(process.cwd(), 'uploads');
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const file = path.join(dir, `${id}.jpg`);
+      const data = imageBase64.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
+      fs.writeFileSync(file, Buffer.from(data, 'base64'));
+      
+      await prisma.sale.update({
+        where: { id },
+        data: { photoUrl: `/uploads/${id}.jpg` }
+      });
+    }
+    
+    // Recalcular parcelas se solicitado ou se número de parcelas mudou
+    if (recalculateInstallments || (installments && installments !== existingSale.installments)) {
+      // Verificar se há parcelas já pagas
+      const paidInstallments = existingSale.installmentsR.filter(i => i.paid);
+      
+      if (paidInstallments.length > 0) {
+        return reply.code(400).send({ 
+          error: 'Não é possível recalcular parcelas: existem parcelas já pagas',
+          paidCount: paidInstallments.length
+        });
+      }
+      
+      // Deletar parcelas antigas
+      await prisma.installment.deleteMany({ where: { saleId: id } });
+      
+      // Criar novas parcelas
+      const newInstallments = installments ?? existingSale.installments;
+      const newTotal = calculatedTotal ?? existingSale.totalValue;
+      const inst = [] as any[];
+      
+      // Determinar data base para as parcelas
+      let baseDate: Date;
+      if (firstPaymentDate) {
+        const [year, month] = firstPaymentDate.split('-').map(Number);
+        baseDate = new Date(year, month - 1, 1);
+      } else {
+        baseDate = new Date(saleDate || existingSale.saleDate);
+      }
+      
+      if (customInstallmentValues && Array.isArray(customInstallmentValues) && customInstallmentValues.length === newInstallments) {
+        for (let i = 0; i < newInstallments; i++) {
+          const due = new Date(baseDate);
+          due.setMonth(due.getMonth() + i);
+          inst.push({ saleId: id, sequence: i + 1, amount: customInstallmentValues[i], dueDate: due });
+        }
+      } else if (roundUpInstallments && newInstallments > 1) {
+        const parcelaArredondada = Math.ceil(newTotal / newInstallments);
+        const somaArredondada = parcelaArredondada * (newInstallments - 1);
+        const ultimaParcela = newTotal - somaArredondada;
+        
+        for (let i = 0; i < newInstallments; i++) {
+          const due = new Date(baseDate);
+          due.setMonth(due.getMonth() + i);
+          const amount = i === newInstallments - 1 ? ultimaParcela : parcelaArredondada;
+          inst.push({ saleId: id, sequence: i + 1, amount, dueDate: due });
+        }
+      } else {
+        const per = newInstallments > 1 ? newTotal / newInstallments : newTotal;
+        for (let i = 0; i < newInstallments; i++) {
+          const due = new Date(baseDate);
+          due.setMonth(due.getMonth() + i);
+          inst.push({ saleId: id, sequence: i + 1, amount: per, dueDate: due });
+        }
+      }
+      
+      await prisma.installment.createMany({ data: inst });
+    }
+    
+    // Retornar venda atualizada com relacionamentos
+    const result = await prisma.sale.findUnique({
+      where: { id },
+      include: { 
+        client: true,
+        items: true,
+        installmentsR: { orderBy: { sequence: 'asc' } }
+      }
+    });
+    
+    return { success: true, sale: result };
+  } catch (error: any) {
+    console.error('Erro ao editar venda:', error);
+    return reply.code(500).send({ error: error.message || 'Erro ao editar venda' });
+  }
+});
+
+// Buscar venda por ID (para edição)
+app.get('/sales/:id', async (req: any, reply) => {
+  const id = Number(req.params.id);
+  
+  try {
+    const sale = await prisma.sale.findUnique({
+      where: { id },
+      include: { 
+        client: true,
+        items: true,
+        installmentsR: { orderBy: { sequence: 'asc' } }
+      }
+    });
+    
+    if (!sale) {
+      return reply.code(404).send({ error: 'Venda não encontrada' });
+    }
+    
+    return sale;
+  } catch (error: any) {
+    return reply.code(500).send({ error: error.message || 'Erro ao buscar venda' });
+  }
+});
+
 app.post('/sales', async (req: any) => {
-  const { clientId, itemName, itemCode, factor, itemType, baseValue, totalValue, paymentMethod, installments, roundUpInstallments, customInstallmentValues, saleDate, observations, sellerName, commission, imageBase64, sendCard, items, discount, firstPaymentDate } = req.body;
+  const { clientId, itemName, itemCode, factor, itemType, baseValue, totalValue, paymentMethod, installments, roundUpInstallments, customInstallmentValues, saleDate, observations, sellerName, commission, imageBase64, sendCard, items, discount, firstPaymentDate, isExchange } = req.body;
   
   // Calcular total se houver itens
   let calculatedTotal = totalValue;
@@ -388,7 +586,8 @@ app.post('/sales', async (req: any) => {
       observations, 
       sellerName, 
       commission,
-      discount: discount || 0
+      discount: discount || 0,
+      isExchange: isExchange || false
     }
   });
   
