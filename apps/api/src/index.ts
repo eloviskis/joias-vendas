@@ -754,6 +754,62 @@ app.put('/installments/:id', async (req: any) => {
   });
 });
 
+// Renegociar venda - adicionar novas parcelas
+app.post('/sales/:id/renegotiate', async (req: any) => {
+  const saleId = Number(req.params.id);
+  const { newInstallments, startDate, totalValue } = req.body;
+  
+  // Buscar venda atual
+  const sale = await prisma.sale.findUnique({
+    where: { id: saleId },
+    include: { installmentsR: true }
+  });
+  
+  if (!sale) {
+    return { error: 'Venda não encontrada' };
+  }
+  
+  // Calcular sequência inicial (após última parcela existente)
+  const maxSequence = Math.max(...sale.installmentsR.map(i => i.sequence), 0);
+  
+  // Calcular valor por parcela
+  const valuePerInstallment = Number(totalValue) / Number(newInstallments);
+  
+  // Criar novas parcelas
+  const start = new Date(startDate);
+  const newInstallmentsData = [];
+  
+  for (let i = 0; i < newInstallments; i++) {
+    const dueDate = new Date(start);
+    dueDate.setMonth(dueDate.getMonth() + i);
+    
+    newInstallmentsData.push({
+      saleId,
+      sequence: maxSequence + i + 1,
+      amount: valuePerInstallment,
+      dueDate,
+      paid: false
+    });
+  }
+  
+  // Inserir novas parcelas
+  await prisma.installment.createMany({
+    data: newInstallmentsData
+  });
+  
+  // Atualizar valor total e quantidade de parcelas da venda
+  const updatedSale = await prisma.sale.update({
+    where: { id: saleId },
+    data: {
+      totalValue: sale.totalValue + Number(totalValue),
+      installments: sale.installments + Number(newInstallments)
+    },
+    include: { installmentsR: { orderBy: { sequence: 'asc' } }, client: true }
+  });
+  
+  return updatedSale;
+});
+
 app.post('/expenses', async (req: any) => {
   const { description, category, amount, date, paid } = req.body;
   return prisma.expense.create({ data: { description, category, amount, date: new Date(date), paid } });

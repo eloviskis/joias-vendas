@@ -288,6 +288,55 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
   const [editInstallments, setEditInstallments] = useState<{id: number, amount: string, dueDate: string, paid: boolean, sequence: number}[]>([]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   
+  // Estados para renegociação
+  const [showRenegotiate, setShowRenegotiate] = useState(false);
+  const [renegotiateForm, setRenegotiateForm] = useState({ totalValue: '', installments: '1', startDate: '' });
+  const [isRenegotiating, setIsRenegotiating] = useState(false);
+  
+  // Função para renegociar (adicionar parcelas)
+  const handleRenegotiate = async () => {
+    if (!editingSale || !token) return;
+    
+    const totalValue = parseFloat(renegotiateForm.totalValue);
+    const installments = parseInt(renegotiateForm.installments);
+    
+    if (!totalValue || totalValue <= 0 || !installments || installments < 1 || !renegotiateForm.startDate) {
+      alert('Preencha todos os campos corretamente');
+      return;
+    }
+    
+    setIsRenegotiating(true);
+    try {
+      const res = await fetch(`${API_URL}/sales/${editingSale.id}/renegotiate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          totalValue,
+          newInstallments: installments,
+          startDate: renegotiateForm.startDate
+        })
+      });
+      
+      if (!res.ok) {
+        throw new Error('Erro ao renegociar');
+      }
+      
+      alert('✅ Renegociação realizada com sucesso!');
+      setShowRenegotiate(false);
+      setRenegotiateForm({ totalValue: '', installments: '1', startDate: '' });
+      setEditingSale(null);
+      onUpdate();
+    } catch (error) {
+      console.error('Erro ao renegociar:', error);
+      alert('❌ Erro ao renegociar venda');
+    } finally {
+      setIsRenegotiating(false);
+    }
+  };
+  
   // Atualizar formulário quando editingSale mudar
   useEffect(() => {
     if (editingSale) {
@@ -886,6 +935,74 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
                     </p>
                   </div>
                 )}
+                
+                {/* Seção de Renegociação */}
+                <div className="border-t pt-4 mt-4">
+                  <button
+                    onClick={() => setShowRenegotiate(!showRenegotiate)}
+                    className="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+                  >
+                    🔄 {showRenegotiate ? 'Fechar Renegociação' : 'Renegociar / Adicionar Parcelas'}
+                  </button>
+                  
+                  {showRenegotiate && (
+                    <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <h4 className="font-semibold text-blue-800 mb-3">➕ Adicionar Novas Parcelas</h4>
+                      <p className="text-xs text-blue-600 mb-3">Adicione valor extra dividido em novas parcelas (isso NÃO altera as parcelas existentes)</p>
+                      
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-semibold text-blue-700 mb-1">💰 Valor a Adicionar</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={renegotiateForm.totalValue}
+                            onChange={e => setRenegotiateForm({...renegotiateForm, totalValue: e.target.value})}
+                            className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Ex: 500.00"
+                          />
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-sm font-semibold text-blue-700 mb-1">📊 Qtd. Parcelas</label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={renegotiateForm.installments}
+                              onChange={e => setRenegotiateForm({...renegotiateForm, installments: e.target.value})}
+                              className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              placeholder="Ex: 3"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-blue-700 mb-1">📅 Início</label>
+                            <input
+                              type="date"
+                              value={renegotiateForm.startDate}
+                              onChange={e => setRenegotiateForm({...renegotiateForm, startDate: e.target.value})}
+                              className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                        </div>
+                        
+                        {renegotiateForm.totalValue && renegotiateForm.installments && (
+                          <p className="text-sm text-blue-700 bg-blue-100 p-2 rounded">
+                            📌 Cada nova parcela: <strong>R$ {(parseFloat(renegotiateForm.totalValue || '0') / parseInt(renegotiateForm.installments || '1')).toFixed(2)}</strong>
+                          </p>
+                        )}
+                        
+                        <button
+                          onClick={handleRenegotiate}
+                          disabled={isRenegotiating || !renegotiateForm.totalValue || !renegotiateForm.startDate}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-semibold transition disabled:opacity-50"
+                        >
+                          {isRenegotiating ? '⏳ Processando...' : '✅ Confirmar Renegociação'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               
               <div className="flex gap-3 mt-6">
@@ -962,6 +1079,11 @@ export default function App() {
   });
   const [editInstallmentsGlobal, setEditInstallmentsGlobal] = useState<{id: number, amount: string, dueDate: string, paid: boolean, sequence: number}[]>([]);
   const [isSavingEditGlobal, setIsSavingEditGlobal] = useState(false);
+  
+  // Estados de renegociação global
+  const [showRenegotiateGlobal, setShowRenegotiateGlobal] = useState(false);
+  const [renegotiateFormGlobal, setRenegotiateFormGlobal] = useState({ totalValue: '', installments: '1', startDate: '' });
+  const [isRenegotiatingGlobal, setIsRenegotiatingGlobal] = useState(false);
 
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [loggedEmail, setLoggedEmail] = useState(localStorage.getItem('loggedEmail') || '');
@@ -1097,6 +1219,50 @@ export default function App() {
       console.error(err);
     } finally {
       setIsSavingEditGlobal(false);
+    }
+  };
+  
+  // Função de renegociação global
+  const handleRenegotiateGlobal = async () => {
+    if (!editingSale || !token) return;
+    
+    const totalValue = parseFloat(renegotiateFormGlobal.totalValue);
+    const installments = parseInt(renegotiateFormGlobal.installments);
+    
+    if (!totalValue || totalValue <= 0 || !installments || installments < 1 || !renegotiateFormGlobal.startDate) {
+      alert('Preencha todos os campos corretamente');
+      return;
+    }
+    
+    setIsRenegotiatingGlobal(true);
+    try {
+      const res = await fetch(`/api/sales/${editingSale.id}/renegotiate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          totalValue,
+          newInstallments: installments,
+          startDate: renegotiateFormGlobal.startDate
+        })
+      });
+      
+      if (!res.ok) {
+        throw new Error('Erro ao renegociar');
+      }
+      
+      alert('✅ Renegociação realizada com sucesso!');
+      setShowRenegotiateGlobal(false);
+      setRenegotiateFormGlobal({ totalValue: '', installments: '1', startDate: '' });
+      setEditingSale(null);
+      window.location.reload();
+    } catch (error) {
+      console.error('Erro ao renegociar:', error);
+      alert('❌ Erro ao renegociar venda');
+    } finally {
+      setIsRenegotiatingGlobal(false);
     }
   };
 
@@ -2587,6 +2753,74 @@ export default function App() {
                   <p className="text-xs text-gray-500 mt-2">* Parcelas pagas não podem ser editadas</p>
                 </div>
               )}
+              
+              {/* Seção de Renegociação Global */}
+              <div className="border-t pt-4 mt-4">
+                <button
+                  onClick={() => setShowRenegotiateGlobal(!showRenegotiateGlobal)}
+                  className="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+                >
+                  🔄 {showRenegotiateGlobal ? 'Fechar Renegociação' : 'Renegociar / Adicionar Parcelas'}
+                </button>
+                
+                {showRenegotiateGlobal && (
+                  <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <h4 className="font-semibold text-blue-800 mb-3">➕ Adicionar Novas Parcelas</h4>
+                    <p className="text-xs text-blue-600 mb-3">Adicione valor extra dividido em novas parcelas (isso NÃO altera as parcelas existentes)</p>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-semibold text-blue-700 mb-1">💰 Valor a Adicionar</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={renegotiateFormGlobal.totalValue}
+                          onChange={e => setRenegotiateFormGlobal({...renegotiateFormGlobal, totalValue: e.target.value})}
+                          className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Ex: 500.00"
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-semibold text-blue-700 mb-1">📊 Qtd. Parcelas</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={renegotiateFormGlobal.installments}
+                            onChange={e => setRenegotiateFormGlobal({...renegotiateFormGlobal, installments: e.target.value})}
+                            className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Ex: 3"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-blue-700 mb-1">📅 Início</label>
+                          <input
+                            type="date"
+                            value={renegotiateFormGlobal.startDate}
+                            onChange={e => setRenegotiateFormGlobal({...renegotiateFormGlobal, startDate: e.target.value})}
+                            className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                      </div>
+                      
+                      {renegotiateFormGlobal.totalValue && renegotiateFormGlobal.installments && (
+                        <p className="text-sm text-blue-700 bg-blue-100 p-2 rounded">
+                          📌 Cada nova parcela: <strong>R$ {(parseFloat(renegotiateFormGlobal.totalValue || '0') / parseInt(renegotiateFormGlobal.installments || '1')).toFixed(2)}</strong>
+                        </p>
+                      )}
+                      
+                      <button
+                        onClick={handleRenegotiateGlobal}
+                        disabled={isRenegotiatingGlobal || !renegotiateFormGlobal.totalValue || !renegotiateFormGlobal.startDate}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-semibold transition disabled:opacity-50"
+                      >
+                        {isRenegotiatingGlobal ? '⏳ Processando...' : '✅ Confirmar Renegociação'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             
             <div className="flex gap-3 mt-6">
@@ -4742,6 +4976,11 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
   const [editSaleForm, setEditSaleForm] = useState({ itemName: '', itemCode: '', totalValue: '', sellerName: '', observations: '', isExchange: false });
   const [editInstallments, setEditInstallments] = useState<{id: number, amount: number, dueDate: string, paid: boolean, sequence: number}[]>([]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  
+  // Estados de renegociação
+  const [showRenegotiate, setShowRenegotiate] = useState(false);
+  const [renegotiateForm, setRenegotiateForm] = useState({ totalValue: '', installments: '1', startDate: '' });
+  const [isRenegotiating, setIsRenegotiating] = useState(false);
 
   // Populate edit form when editingSale changes
   useEffect(() => {
@@ -4803,6 +5042,51 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
       alert('Erro ao salvar alterações');
     } finally {
       setIsSavingEdit(false);
+    }
+  };
+  
+  // Função de renegociação
+  const handleRenegotiate = async () => {
+    if (!editingSale) return;
+    
+    const totalValue = parseFloat(renegotiateForm.totalValue);
+    const installments = parseInt(renegotiateForm.installments);
+    
+    if (!totalValue || totalValue <= 0 || !installments || installments < 1 || !renegotiateForm.startDate) {
+      alert('Preencha todos os campos corretamente');
+      return;
+    }
+    
+    setIsRenegotiating(true);
+    try {
+      const res = await fetch(`/api/sales/${editingSale.id}/renegotiate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          totalValue,
+          newInstallments: installments,
+          startDate: renegotiateForm.startDate
+        })
+      });
+      
+      if (!res.ok) {
+        throw new Error('Erro ao renegociar');
+      }
+      
+      alert('✅ Renegociação realizada com sucesso!');
+      setShowRenegotiate(false);
+      setRenegotiateForm({ totalValue: '', installments: '1', startDate: '' });
+      setEditingSale(null);
+      await loadClientSales(selectedClient.id);
+      await loadAllSales();
+    } catch (error) {
+      console.error('Erro ao renegociar:', error);
+      alert('❌ Erro ao renegociar venda');
+    } finally {
+      setIsRenegotiating(false);
     }
   };
 
@@ -5272,6 +5556,73 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
                                         <p className="text-xs text-gray-500 mt-2">* Parcelas pagas não podem ser editadas</p>
                                       </div>
                                     )}
+                                    
+                                    {/* Seção de Renegociação */}
+                                    <div className="border-t pt-4 mt-4">
+                                      <button
+                                        onClick={() => setShowRenegotiate(!showRenegotiate)}
+                                        className="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+                                      >
+                                        🔄 {showRenegotiate ? 'Fechar Renegociação' : 'Renegociar / Adicionar Parcelas'}
+                                      </button>
+                                      
+                                      {showRenegotiate && (
+                                        <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                          <h4 className="font-semibold text-blue-800 mb-3">➕ Adicionar Novas Parcelas</h4>
+                                          <p className="text-xs text-blue-600 mb-3">Adicione valor extra dividido em novas parcelas</p>
+                                          
+                                          <div className="space-y-3">
+                                            <div>
+                                              <label className="block text-sm font-semibold text-blue-700 mb-1">💰 Valor a Adicionar</label>
+                                              <input
+                                                type="number"
+                                                step="0.01"
+                                                value={renegotiateForm.totalValue}
+                                                onChange={e => setRenegotiateForm({...renegotiateForm, totalValue: e.target.value})}
+                                                className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                placeholder="Ex: 500.00"
+                                              />
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-2 gap-3">
+                                              <div>
+                                                <label className="block text-sm font-semibold text-blue-700 mb-1">📊 Qtd. Parcelas</label>
+                                                <input
+                                                  type="number"
+                                                  min="1"
+                                                  value={renegotiateForm.installments}
+                                                  onChange={e => setRenegotiateForm({...renegotiateForm, installments: e.target.value})}
+                                                  className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                />
+                                              </div>
+                                              <div>
+                                                <label className="block text-sm font-semibold text-blue-700 mb-1">📅 Início</label>
+                                                <input
+                                                  type="date"
+                                                  value={renegotiateForm.startDate}
+                                                  onChange={e => setRenegotiateForm({...renegotiateForm, startDate: e.target.value})}
+                                                  className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                />
+                                              </div>
+                                            </div>
+                                            
+                                            {renegotiateForm.totalValue && renegotiateForm.installments && (
+                                              <p className="text-sm text-blue-700 bg-blue-100 p-2 rounded">
+                                                📌 Cada nova parcela: <strong>R$ {(parseFloat(renegotiateForm.totalValue || '0') / parseInt(renegotiateForm.installments || '1')).toFixed(2)}</strong>
+                                              </p>
+                                            )}
+                                            
+                                            <button
+                                              onClick={handleRenegotiate}
+                                              disabled={isRenegotiating || !renegotiateForm.totalValue || !renegotiateForm.startDate}
+                                              className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-semibold transition disabled:opacity-50"
+                                            >
+                                              {isRenegotiating ? '⏳ Processando...' : '✅ Confirmar Renegociação'}
+                                            </button>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                   
                                   <div className="flex gap-3 mt-6">
