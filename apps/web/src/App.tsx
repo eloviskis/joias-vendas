@@ -285,6 +285,7 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
     sellerName: '',
     isExchange: false
   });
+  const [editInstallments, setEditInstallments] = useState<{id: number, amount: string, dueDate: string, paid: boolean, sequence: number}[]>([]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   
   // Atualizar formulário quando editingSale mudar
@@ -298,6 +299,16 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
         sellerName: editingSale.sellerName || '',
         isExchange: editingSale.isExchange || false
       });
+      // Popular parcelas para edição
+      if (editingSale.installmentsR) {
+        setEditInstallments(editingSale.installmentsR.map((inst: any) => ({
+          id: inst.id,
+          amount: String(inst.amount),
+          dueDate: new Date(inst.dueDate).toISOString().split('T')[0],
+          paid: inst.paid,
+          sequence: inst.sequence
+        })));
+      }
     }
   }, [editingSale]);
   
@@ -307,6 +318,7 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
     
     setIsSavingEdit(true);
     try {
+      // Primeiro salvar a venda
       const res = await fetch(`${API_URL}/sales/${editingSale.id}`, {
         method: 'PUT',
         headers: {
@@ -323,14 +335,31 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
         })
       });
       
-      if (res.ok) {
-        alert('✅ Venda atualizada com sucesso!');
-        setEditingSale(null);
-        window.location.reload();
-      } else {
+      if (!res.ok) {
         const data = await res.json();
         alert(`❌ Erro: ${data.error || 'Falha ao atualizar venda'}`);
+        return;
       }
+      
+      // Depois salvar as parcelas modificadas (somente não pagas)
+      const unpaidInstallments = editInstallments.filter(i => !i.paid);
+      for (const inst of unpaidInstallments) {
+        await fetch(`${API_URL}/installments/${inst.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            amount: parseFloat(inst.amount),
+            dueDate: inst.dueDate
+          })
+        });
+      }
+      
+      alert('✅ Venda e parcelas atualizadas com sucesso!');
+      setEditingSale(null);
+      window.location.reload();
     } catch (err) {
       alert('❌ Erro ao atualizar venda');
       console.error(err);
@@ -815,6 +844,48 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
                     🔄 Esta é uma TROCA
                   </label>
                 </div>
+                
+                {/* Edição de Parcelas */}
+                {editInstallments.length > 0 && (
+                  <div className="border-t pt-4 mt-4">
+                    <h3 className="font-semibold text-gray-700 mb-3">📅 Parcelas ({editInstallments.filter(i => !i.paid).length} restantes)</h3>
+                    <div className="max-h-48 overflow-y-auto space-y-2">
+                      {editInstallments.map((inst, idx) => (
+                        <div key={inst.id} className={`flex items-center gap-2 p-2 rounded ${inst.paid ? 'bg-green-50 opacity-60' : 'bg-gray-50'}`}>
+                          <span className="w-8 text-center text-xs font-bold text-gray-500">{inst.sequence}ª</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={inst.amount}
+                            onChange={e => {
+                              const newInst = [...editInstallments];
+                              newInst[idx].amount = e.target.value;
+                              setEditInstallments(newInst);
+                            }}
+                            disabled={inst.paid}
+                            className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-purple-500 disabled:bg-gray-200"
+                            placeholder="Valor"
+                          />
+                          <input
+                            type="date"
+                            value={inst.dueDate}
+                            onChange={e => {
+                              const newInst = [...editInstallments];
+                              newInst[idx].dueDate = e.target.value;
+                              setEditInstallments(newInst);
+                            }}
+                            disabled={inst.paid}
+                            className="px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-purple-500 disabled:bg-gray-200"
+                          />
+                          {inst.paid && <span className="text-green-600 text-xs font-bold">✓ PAGA</span>}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      💡 Apenas parcelas não pagas podem ser editadas
+                    </p>
+                  </div>
+                )}
               </div>
               
               <div className="flex gap-3 mt-6">
@@ -823,18 +894,6 @@ function CarneModal({ client, sales, onClose, onMarkPaid, onUpdateClient, token 
                   className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-3 rounded-lg font-semibold transition"
                 >
                   Cancelar
-                </button>
-                <button
-                  onClick={() => {
-                    setEditingPaymentDate(editingSale);
-                    const firstDue = editingSale.installmentsR?.[0]?.dueDate ? new Date(editingSale.installmentsR[0].dueDate) : new Date();
-                    setNewPaymentDate(`${firstDue.getFullYear()}-${String(firstDue.getMonth() + 1).padStart(2, '0')}`);
-                    setEditingSale(null);
-                  }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-semibold transition"
-                  disabled={!editingSale.installmentsR || editingSale.installmentsR.length <= 1}
-                >
-                  📅 Datas
                 </button>
                 <button
                   onClick={handleSaveEditSale}
@@ -901,6 +960,7 @@ export default function App() {
     sellerName: '',
     isExchange: false
   });
+  const [editInstallmentsGlobal, setEditInstallmentsGlobal] = useState<{id: number, amount: string, dueDate: string, paid: boolean, sequence: number}[]>([]);
   const [isSavingEditGlobal, setIsSavingEditGlobal] = useState(false);
 
   const [token, setToken] = useState(localStorage.getItem('token') || '');
@@ -971,6 +1031,16 @@ export default function App() {
         sellerName: editingSale.sellerName || '',
         isExchange: editingSale.isExchange || false
       });
+      // Popular parcelas para edição
+      if (editingSale.installmentsR) {
+        setEditInstallmentsGlobal(editingSale.installmentsR.map((inst: any) => ({
+          id: inst.id,
+          amount: String(inst.amount),
+          dueDate: new Date(inst.dueDate).toISOString().split('T')[0],
+          paid: inst.paid,
+          sequence: inst.sequence
+        })));
+      }
     }
   }, [editingSale]);
   
@@ -980,6 +1050,7 @@ export default function App() {
     
     setIsSavingEditGlobal(true);
     try {
+      // Primeiro salvar a venda
       const res = await fetch(`/api/sales/${editingSale.id}`, {
         method: 'PUT',
         headers: {
@@ -996,14 +1067,31 @@ export default function App() {
         })
       });
       
-      if (res.ok) {
-        alert('✅ Venda atualizada com sucesso!');
-        setEditingSale(null);
-        window.location.reload();
-      } else {
+      if (!res.ok) {
         const data = await res.json();
         alert(`❌ Erro: ${data.error || 'Falha ao atualizar venda'}`);
+        return;
       }
+      
+      // Depois salvar as parcelas modificadas (somente não pagas)
+      const unpaidInstallments = editInstallmentsGlobal.filter(i => !i.paid);
+      for (const inst of unpaidInstallments) {
+        await fetch(`/api/installments/${inst.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            amount: parseFloat(inst.amount),
+            dueDate: inst.dueDate
+          })
+        });
+      }
+      
+      alert('✅ Venda e parcelas atualizadas com sucesso!');
+      setEditingSale(null);
+      window.location.reload();
     } catch (err) {
       alert('❌ Erro ao atualizar venda');
       console.error(err);
@@ -2457,6 +2545,48 @@ export default function App() {
                   🔄 Esta é uma TROCA
                 </label>
               </div>
+              
+              {/* Edição de Parcelas */}
+              {editInstallmentsGlobal.length > 0 && (
+                <div className="border-t pt-4 mt-2">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">📅 Parcelas</h4>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {editInstallmentsGlobal.map((inst, idx) => (
+                      <div key={inst.id} className={`flex items-center gap-2 p-2 rounded-lg ${inst.paid ? 'bg-green-50' : 'bg-gray-50'}`}>
+                        <span className="text-xs font-semibold text-gray-500 w-8">#{inst.sequence}</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={inst.amount}
+                          onChange={e => {
+                            const updated = [...editInstallmentsGlobal];
+                            updated[idx] = {...updated[idx], amount: parseFloat(e.target.value) || 0};
+                            setEditInstallmentsGlobal(updated);
+                          }}
+                          disabled={inst.paid}
+                          className={`flex-1 px-2 py-1 text-sm border rounded ${inst.paid ? 'bg-gray-200 text-gray-500' : 'border-gray-300 focus:ring-2 focus:ring-purple-500'}`}
+                          placeholder="Valor"
+                        />
+                        <input
+                          type="date"
+                          value={inst.dueDate}
+                          onChange={e => {
+                            const updated = [...editInstallmentsGlobal];
+                            updated[idx] = {...updated[idx], dueDate: e.target.value};
+                            setEditInstallmentsGlobal(updated);
+                          }}
+                          disabled={inst.paid}
+                          className={`px-2 py-1 text-sm border rounded ${inst.paid ? 'bg-gray-200 text-gray-500' : 'border-gray-300 focus:ring-2 focus:ring-purple-500'}`}
+                        />
+                        {inst.paid && (
+                          <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">PAGA</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">* Parcelas pagas não podem ser editadas</p>
+                </div>
+              )}
             </div>
             
             <div className="flex gap-3 mt-6">
