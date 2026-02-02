@@ -4739,6 +4739,72 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
   const [sortOrder, setSortOrder] = useState<'recent' | 'oldest'>('recent');
   const [clientSortOrder, setClientSortOrder] = useState<'recent' | 'oldest'>('recent');
   const [editingSale, setEditingSale] = useState<any>(null);
+  const [editSaleForm, setEditSaleForm] = useState({ itemName: '', itemCode: '', totalValue: '', sellerName: '', observations: '', isExchange: false });
+  const [editInstallments, setEditInstallments] = useState<{id: number, amount: number, dueDate: string, paid: boolean, sequence: number}[]>([]);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  // Populate edit form when editingSale changes
+  useEffect(() => {
+    if (editingSale) {
+      setEditSaleForm({
+        itemName: editingSale.itemName || '',
+        itemCode: editingSale.itemCode || '',
+        totalValue: String(editingSale.totalValue || ''),
+        sellerName: editingSale.sellerName || '',
+        observations: editingSale.observations || '',
+        isExchange: editingSale.isExchange || false
+      });
+      if (editingSale.installmentsR) {
+        setEditInstallments(editingSale.installmentsR.map((inst: any) => ({
+          id: inst.id,
+          amount: inst.amount,
+          dueDate: inst.dueDate.split('T')[0],
+          paid: inst.paid,
+          sequence: inst.sequence
+        })));
+      }
+    }
+  }, [editingSale]);
+
+  const handleSaveEditSale = async () => {
+    if (!editingSale) return;
+    setIsSavingEdit(true);
+    try {
+      const res = await fetch(`/api/sales/${editingSale.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          itemName: editSaleForm.itemName,
+          itemCode: editSaleForm.itemCode,
+          totalValue: parseFloat(editSaleForm.totalValue),
+          sellerName: editSaleForm.sellerName,
+          observations: editSaleForm.observations,
+          isExchange: editSaleForm.isExchange
+        })
+      });
+      if (!res.ok) throw new Error('Erro ao salvar');
+      
+      // Save installments
+      for (const inst of editInstallments) {
+        if (!inst.paid) {
+          await fetch(`/api/installments/${inst.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ amount: inst.amount, dueDate: inst.dueDate })
+          });
+        }
+      }
+      
+      await loadClientSales(selectedClient.id);
+      await loadAllSales();
+      setEditingSale(null);
+    } catch (error) {
+      console.error('Erro ao salvar venda:', error);
+      alert('Erro ao salvar alterações');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   const filteredClients = useMemo(() => {
     let filtered = clientSearch.trim() ? clients.filter(c => {
@@ -5086,16 +5152,143 @@ function HistoricoPage({ token, openClientModal }: { token: string, openClientMo
                             {/* Modal de Edição de Venda */}
                             {editingSale && (
                               <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-                                <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 relative" onClick={e => e.stopPropagation()}>
+                                <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 relative max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                                   <button
                                     onClick={() => setEditingSale(null)}
                                     className="absolute top-2 right-2 text-2xl text-gray-400 hover:text-gray-700"
                                     title="Fechar"
                                   >×</button>
-                                  <h2 className="text-2xl font-bold mb-4 text-purple-700">Editar Venda</h2>
-                                  <p className="mb-2 text-gray-700 font-semibold">Venda: {editingSale.itemName}</p>
-                                  {/* Aqui entra o formulário de edição de venda (campos, produtos, valores, etc) */}
-                                  <div className="text-gray-500">(Em breve: formulário de edição completo)</div>
+                                  <h2 className="text-2xl font-bold mb-4 text-purple-700">✏️ Editar Venda</h2>
+                                  
+                                  <div className="space-y-4">
+                                    <div>
+                                      <label className="block text-sm font-semibold text-gray-700 mb-1">💎 Nome do Item *</label>
+                                      <input
+                                        type="text"
+                                        value={editSaleForm.itemName}
+                                        onChange={e => setEditSaleForm({...editSaleForm, itemName: e.target.value})}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        placeholder="Ex: Anel de Ouro"
+                                      />
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-1">📦 Código</label>
+                                        <input
+                                          type="text"
+                                          value={editSaleForm.itemCode}
+                                          onChange={e => setEditSaleForm({...editSaleForm, itemCode: e.target.value})}
+                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                          placeholder="Código do item"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-1">💰 Valor Total *</label>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          value={editSaleForm.totalValue}
+                                          onChange={e => setEditSaleForm({...editSaleForm, totalValue: e.target.value})}
+                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                          placeholder="0,00"
+                                        />
+                                      </div>
+                                    </div>
+                                    
+                                    <div>
+                                      <label className="block text-sm font-semibold text-gray-700 mb-1">👤 Vendedor</label>
+                                      <input
+                                        type="text"
+                                        value={editSaleForm.sellerName}
+                                        onChange={e => setEditSaleForm({...editSaleForm, sellerName: e.target.value})}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        placeholder="Nome do vendedor"
+                                      />
+                                    </div>
+                                    
+                                    <div>
+                                      <label className="block text-sm font-semibold text-gray-700 mb-1">📝 Observações</label>
+                                      <textarea
+                                        value={editSaleForm.observations}
+                                        onChange={e => setEditSaleForm({...editSaleForm, observations: e.target.value})}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        rows={2}
+                                        placeholder="Observações sobre a venda"
+                                      />
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-3 bg-orange-50 p-3 rounded-lg border border-orange-200">
+                                      <input
+                                        type="checkbox"
+                                        id="editIsExchangeHist"
+                                        checked={editSaleForm.isExchange}
+                                        onChange={e => setEditSaleForm({...editSaleForm, isExchange: e.target.checked})}
+                                        className="w-5 h-5 text-orange-500 rounded focus:ring-orange-500"
+                                      />
+                                      <label htmlFor="editIsExchangeHist" className="text-sm font-semibold text-orange-700 cursor-pointer">
+                                        🔄 Esta é uma TROCA
+                                      </label>
+                                    </div>
+                                    
+                                    {/* Edição de Parcelas */}
+                                    {editInstallments.length > 0 && (
+                                      <div className="border-t pt-4 mt-2">
+                                        <h4 className="text-sm font-semibold text-gray-700 mb-3">📅 Parcelas</h4>
+                                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                                          {editInstallments.map((inst, idx) => (
+                                            <div key={inst.id} className={`flex items-center gap-2 p-2 rounded-lg ${inst.paid ? 'bg-green-50' : 'bg-gray-50'}`}>
+                                              <span className="text-xs font-semibold text-gray-500 w-8">#{inst.sequence}</span>
+                                              <input
+                                                type="number"
+                                                step="0.01"
+                                                value={inst.amount}
+                                                onChange={e => {
+                                                  const updated = [...editInstallments];
+                                                  updated[idx] = {...updated[idx], amount: parseFloat(e.target.value) || 0};
+                                                  setEditInstallments(updated);
+                                                }}
+                                                disabled={inst.paid}
+                                                className={`flex-1 px-2 py-1 text-sm border rounded ${inst.paid ? 'bg-gray-200 text-gray-500' : 'border-gray-300 focus:ring-2 focus:ring-purple-500'}`}
+                                                placeholder="Valor"
+                                              />
+                                              <input
+                                                type="date"
+                                                value={inst.dueDate}
+                                                onChange={e => {
+                                                  const updated = [...editInstallments];
+                                                  updated[idx] = {...updated[idx], dueDate: e.target.value};
+                                                  setEditInstallments(updated);
+                                                }}
+                                                disabled={inst.paid}
+                                                className={`px-2 py-1 text-sm border rounded ${inst.paid ? 'bg-gray-200 text-gray-500' : 'border-gray-300 focus:ring-2 focus:ring-purple-500'}`}
+                                              />
+                                              {inst.paid && (
+                                                <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">PAGA</span>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                        <p className="text-xs text-gray-500 mt-2">* Parcelas pagas não podem ser editadas</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                  
+                                  <div className="flex gap-3 mt-6">
+                                    <button
+                                      onClick={() => setEditingSale(null)}
+                                      className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold"
+                                    >
+                                      Cancelar
+                                    </button>
+                                    <button
+                                      onClick={handleSaveEditSale}
+                                      disabled={isSavingEdit || !editSaleForm.itemName || !editSaleForm.totalValue}
+                                      className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold disabled:opacity-50"
+                                    >
+                                      {isSavingEdit ? 'Salvando...' : '💾 Salvar'}
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             )}
